@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
+ * 파일의 재생 길이(초)를 비동기로 측정한다.
+ * 임시 오디오 엘리먼트에 metadata 만 로드해 duration 을 읽는다.
+ */
+function probeDuration(url) {
+  return new Promise((resolve) => {
+    const a = new Audio();
+    a.preload = 'metadata';
+    a.src = url;
+    a.addEventListener('loadedmetadata', () => resolve(a.duration || 0), { once: true });
+    a.addEventListener('error', () => resolve(0), { once: true });
+  });
+}
+
+/**
  * useAudioEngine
  * -------------------------------------------------------------
  * 로컬 MP3 재생목록 + 실시간 주파수 분석을 담당하는 Web Audio 엔진.
@@ -9,29 +23,30 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  *   MediaElementSource → AnalyserNode → GainNode(볼륨) → destination
  *
  * 설계 포인트
- *  - 재생목록: 여러 파일을 objectURL 로 만들어 tracksRef 에 보관하고,
- *    현재 인덱스(indexRef)의 트랙만 <audio> 에 로드한다.
- *  - 자동 넘김: 곡이 끝나면('ended') 다음 트랙으로 이동한다. 이벤트 핸들러가
- *    항상 최신 상태를 보도록 onEndedRef 로 콜백을 주입한다(stale closure 방지).
- *  - MediaElementSource 는 <audio> 당 한 번만 생성 가능하므로, 트랙 전환 시
- *    노드는 재사용하고 el.src 만 교체한다.
- *  - 오토플레이 정책: 그래프 생성/ctx.resume 은 사용자 제스처 시점에 수행하고,
- *    자동 넘김 시엔 이미 재생 중이던 컨텍스트를 이어받아 재생한다.
+ *  - 트랙은 { id, name, url, duration } 구조. 셔플·순서변경·삭제로 위치가
+ *    바뀌어도 "현재 재생 중인 곡"을 놓치지 않도록 id(currentIdRef)로 추적하고,
+ *    변경 후 indexRef 를 id 로부터 다시 계산한다.
+ *  - 자동 넘김: 곡 종료('ended') 시 다음 트랙으로 이동. 이벤트 핸들러가 항상
+ *    최신 상태를 보도록 onEndedRef 로 콜백을 주입한다(stale closure 방지).
+ *  - MediaElementSource 는 <audio> 당 한 번만 생성 가능하므로 노드는 재사용하고
+ *    el.src 만 교체한다.
  */
 export function useAudioEngine() {
-  const audioElRef = useRef(null); // HTMLAudioElement
+  const audioElRef = useRef(null);
   const ctxRef = useRef(null);
   const sourceRef = useRef(null);
   const gainRef = useRef(null);
   const analyserRef = useRef(null);
 
-  const tracksRef = useRef([]); // [{ name, url }]
-  const indexRef = useRef(-1);
-  const onEndedRef = useRef(() => {}); // 곡 종료 시 실행할 최신 콜백
-  const pendingPlayRef = useRef(null); // 대기 중인 canplay 리스너(중복 방지)
+  const tracksRef = useRef([]); // [{ id, name, url, duration }]
+  const indexRef = useRef(-1); // 현재 로드된 트랙의 위치
+  const currentIdRef = useRef(null); // 현재 로드된 트랙의 id(위치 변화에도 유지)
+  const idSeqRef = useRef(0); // 트랙 id 시퀀스
+  const onEndedRef = useRef(() => {});
+  const pendingPlayRef = useRef(null);
 
   const [state, setState] = useState({
-    tracks: [], // UI 표시용(name 만): [{ name }]
+    tracks: [], // UI 표시용: [{ id, name, duration }]
     currentIndex: -1,
     fileName: '',
     isReady: false,
@@ -39,6 +54,15 @@ export function useAudioEngine() {
     currentTime: 0,
     duration: 0,
   });
+
+  /** tracksRef / indexRef 의 최신 상태를 UI state 에 반영 */
+  const syncTracks = useCallback(() => {
+    setState((s) => ({
+      ...s,
+      tracks: tracksRef.current.map((t) => ({ id: t.id, name: t.name, duration: t.duration })),
+      currentIndex: indexRef.current,
+    }));
+  }, []);
 
   /** 최초 1회: 오디오 엘리먼트 준비 + 이벤트 바인딩 */
   useEffect(() => {
@@ -50,7 +74,7 @@ export function useAudioEngine() {
     const onTime = () => setState((s) => ({ ...s, currentTime: el.currentTime }));
     const onPlay = () => setState((s) => ({ ...s, isPlaying: true }));
     const onPause = () => setState((s) => ({ ...s, isPlaying: false }));
-    const onEnded = () => onEndedRef.current(); // 자동 넘김 로직으로 위임
+    const onEnded = () => onEndedRef.current();
 
     el.addEventListener('loadedmetadata', onLoaded);
     el.addEventListener('timeupdate', onTime);
@@ -65,7 +89,7 @@ export function useAudioEngine() {
       el.removeEventListener('play', onPlay);
       el.removeEventListener('pause', onPause);
       el.removeEventListener('ended', onEnded);
-      tracksRef.current.forEach((t) => URL.revokeObjectURL(t.url)); // 메모리 정리
+      tracksRef.current.forEach((t) => URL.revokeObjectURL(t.url));
       ctxRef.current?.close();
     };
   }, []);
@@ -105,6 +129,7 @@ export function useAudioEngine() {
       el.src = track.url;
       el.load();
       indexRef.current = i;
+      currentIdRef.current = track.id;
       setState((s) => ({
         ...s,
         currentIndex: i,
@@ -115,7 +140,6 @@ export function useAudioEngine() {
 
       if (autoplay) {
         ensureGraph();
-        // 이전에 대기 중이던 canplay 리스너가 있으면 제거(빠른 연속 전환 대비)
         if (pendingPlayRef.current) el.removeEventListener('canplay', pendingPlayRef.current);
         const onCan = () => {
           el.removeEventListener('canplay', onCan);
@@ -138,23 +162,39 @@ export function useAudioEngine() {
       );
       if (!files.length) return;
 
-      tracksRef.current.forEach((t) => URL.revokeObjectURL(t.url)); // 이전 목록 정리
-      const tracks = files.map((f) => ({ name: f.name, url: URL.createObjectURL(f) }));
+      tracksRef.current.forEach((t) => URL.revokeObjectURL(t.url));
+      const tracks = files.map((f) => ({
+        id: ++idSeqRef.current,
+        name: f.name,
+        url: URL.createObjectURL(f),
+        duration: 0,
+      }));
       tracksRef.current = tracks;
       indexRef.current = 0;
-      setState((s) => ({ ...s, tracks: tracks.map((t) => ({ name: t.name })) }));
+      currentIdRef.current = tracks[0].id;
+      syncTracks();
       loadIndex(0, false); // 첫 곡은 로드만(재생은 사용자 클릭 때)
+
+      // 각 트랙 길이를 비동기로 측정해 채워 넣는다
+      tracks.forEach((t) => {
+        probeDuration(t.url).then((d) => {
+          t.duration = d; // ref 객체에 반영(이후 syncTracks 에서도 유지)
+          setState((s) => ({
+            ...s,
+            tracks: s.tracks.map((x) => (x.id === t.id ? { ...x, duration: d } : x)),
+          }));
+        });
+      });
     },
-    [loadIndex],
+    [loadIndex, syncTracks],
   );
 
-  /** 곡 종료 시 자동 넘김: 목록이 여러 곡이면 순환 재생, 단일 곡이면 정지 */
+  /** 곡 종료 시 자동 넘김: 여러 곡이면 순환 재생, 단일 곡이면 정지 */
   useEffect(() => {
     onEndedRef.current = () => {
       const tracks = tracksRef.current;
       if (tracks.length > 1) {
-        const next = (indexRef.current + 1) % tracks.length;
-        loadIndex(next, true);
+        loadIndex((indexRef.current + 1) % tracks.length, true);
       } else {
         setState((s) => ({ ...s, isPlaying: false, currentTime: 0 }));
       }
@@ -166,7 +206,7 @@ export function useAudioEngine() {
     const el = audioElRef.current;
     if (!el) return;
     if (!el.src && tracksRef.current.length) {
-      loadIndex(0, true); // 아직 아무것도 로드 안 됐지만 목록이 있으면 첫 곡 재생
+      loadIndex(0, true);
       return;
     }
     if (!el.src) return;
@@ -176,7 +216,6 @@ export function useAudioEngine() {
     else el.pause();
   }, [ensureGraph, loadIndex]);
 
-  /** 목록에서 특정 트랙 선택 재생 */
   const playTrack = useCallback((i) => loadIndex(i, true), [loadIndex]);
 
   /** 다음 곡(순환) */
@@ -186,7 +225,7 @@ export function useAudioEngine() {
     loadIndex((indexRef.current + 1) % t.length, true);
   }, [loadIndex]);
 
-  /** 이전 곡: 3초 이상 재생됐으면 현재 곡을 처음으로, 아니면 이전 곡으로(음악 플레이어 관례) */
+  /** 이전 곡: 3초 이상 재생됐으면 현재 곡을 처음으로, 아니면 이전 곡으로 */
   const prev = useCallback(() => {
     const t = tracksRef.current;
     if (!t.length) return;
@@ -198,18 +237,83 @@ export function useAudioEngine() {
     loadIndex((indexRef.current - 1 + t.length) % t.length, true);
   }, [loadIndex]);
 
-  /** 탐색(초 단위) */
+  /** 재생목록 셔플(Fisher-Yates). 현재 곡은 id 로 위치만 다시 계산 */
+  const shuffle = useCallback(() => {
+    const tracks = tracksRef.current;
+    if (tracks.length < 2) return;
+    for (let i = tracks.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [tracks[i], tracks[j]] = [tracks[j], tracks[i]];
+    }
+    indexRef.current = tracks.findIndex((x) => x.id === currentIdRef.current);
+    syncTracks();
+  }, [syncTracks]);
+
+  /** 드래그 순서 변경: from 위치의 트랙을 to 위치로 이동 */
+  const reorderTracks = useCallback(
+    (from, to) => {
+      const tracks = tracksRef.current;
+      if (from === to || from < 0 || to < 0 || from >= tracks.length || to >= tracks.length) return;
+      const [moved] = tracks.splice(from, 1);
+      tracks.splice(to, 0, moved);
+      indexRef.current = tracks.findIndex((x) => x.id === currentIdRef.current);
+      syncTracks();
+    },
+    [syncTracks],
+  );
+
+  /** 트랙 삭제 */
+  const removeTrack = useCallback(
+    (i) => {
+      const tracks = tracksRef.current;
+      const target = tracks[i];
+      if (!target) return;
+      const wasCurrent = target.id === currentIdRef.current;
+      const el = audioElRef.current;
+      URL.revokeObjectURL(target.url);
+      tracks.splice(i, 1);
+
+      if (tracks.length === 0) {
+        // 목록이 비면 재생 정지 및 초기화
+        el.pause();
+        el.removeAttribute('src');
+        el.load();
+        indexRef.current = -1;
+        currentIdRef.current = null;
+        setState((s) => ({
+          ...s,
+          tracks: [],
+          currentIndex: -1,
+          fileName: '',
+          isReady: false,
+          isPlaying: false,
+          currentTime: 0,
+          duration: 0,
+        }));
+        return;
+      }
+
+      if (wasCurrent) {
+        // 재생 중이던 곡을 지웠으면, 그 자리에 온 곡을 이어서(재생 중이었다면 계속 재생)
+        const wasPlaying = !el.paused;
+        loadIndex(Math.min(i, tracks.length - 1), wasPlaying);
+      } else {
+        indexRef.current = tracks.findIndex((x) => x.id === currentIdRef.current);
+      }
+      syncTracks();
+    },
+    [loadIndex, syncTracks],
+  );
+
   const seek = useCallback((time) => {
     const el = audioElRef.current;
     if (el?.src) el.currentTime = time;
   }, []);
 
-  /** 음악 볼륨(0~1) - GainNode 제어 */
   const setMusicVolume = useCallback((v) => {
     if (gainRef.current) gainRef.current.gain.value = v;
   }, []);
 
-  /** 모드 전환 시 분석기 파라미터 재설정 */
   const setAnalyserConfig = useCallback(({ fftSize, smoothing }) => {
     const a = analyserRef.current;
     if (!a) return;
@@ -225,6 +329,9 @@ export function useAudioEngine() {
     playTrack,
     next,
     prev,
+    shuffle,
+    reorderTracks,
+    removeTrack,
     seek,
     setMusicVolume,
     setAnalyserConfig,

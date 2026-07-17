@@ -6,8 +6,8 @@
 export default function VolumeMixer({ music, asmr, onMusic, onAsmr }) {
   return (
     <div className="space-y-4">
-      <Slider label="음악 · MUSIC" value={music} onChange={onMusic} />
-      <Slider label="ASMR · 자연의 소리" value={asmr} onChange={onAsmr} />
+      <Slider label="MUSIC" value={music} onChange={onMusic} />
+      <Slider label="YOUTUBE" value={asmr} onChange={onAsmr} />
     </div>
   );
 }

@@ -94,12 +94,15 @@ export default function App() {
               tracks={engine.state.tracks}
               currentIndex={engine.state.currentIndex}
               onSelect={engine.playTrack}
+              onRemove={engine.removeTrack}
+              onReorder={engine.reorderTracks}
+              onShuffle={engine.shuffle}
             />
           </div>
 
           <div className="panel">
             <div className="panel-label">
-              <Dot /> 볼륨 믹서 · mixer
+              <Dot /> 볼륨 믹서
             </div>
             <VolumeMixer
               music={musicVol}
@@ -111,7 +114,7 @@ export default function App() {
 
           <div className="panel">
             <div className="panel-label">
-              <Dot /> asmr · 유튜브 배경음
+              <Dot /> YOUTUBE 반복 재생
             </div>
             <AsmrPlayer volume={asmrVol} onInfo={setAsmrInfo} />
           </div>
