@@ -14,11 +14,11 @@ import { rgba, sampleGradient } from '../lib/colorUtils';
  * 성능: props 가 바뀌어도 루프를 재시작하지 않도록 최신 값을 configRef 에 담고,
  *       레벨/피크/데이터 버퍼는 ref 로 유지해 매 프레임 재할당을 피한다.
  */
-export default function Visualizer({ analyserRef, palette, mode, isPlaying }) {
+export default function Visualizer({ analyserRef, palette, mode, active }) {
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
 
-  const configRef = useRef({ palette, mode, isPlaying });
+  const configRef = useRef({ palette, mode, active });
   const levelsRef = useRef(new Float32Array(0)); // 현재 막대 레벨(0~1)
   const peaksRef = useRef(new Float32Array(0)); // 피크 홀드 위치(0~1)
   const dataRef = useRef(new Uint8Array(0)); // 주파수 바이트 버퍼
@@ -28,8 +28,8 @@ export default function Visualizer({ analyserRef, palette, mode, isPlaying }) {
 
   // 최신 props 를 루프에서 참조할 수 있도록 동기화
   useEffect(() => {
-    configRef.current = { palette, mode, isPlaying };
-  }, [palette, mode, isPlaying]);
+    configRef.current = { palette, mode, active };
+  }, [palette, mode, active]);
 
   // 캔버스 해상도(devicePixelRatio) 대응 리사이즈
   useEffect(() => {
@@ -58,7 +58,7 @@ export default function Visualizer({ analyserRef, palette, mode, isPlaying }) {
 
     const draw = () => {
       raf = requestAnimationFrame(draw);
-      const { palette, mode, isPlaying } = configRef.current;
+      const { palette, mode, active } = configRef.current;
       const now = performance.now();
 
       // 레트로 모드: frameInterval 만큼 렌더를 건너뛰어 '끊기는' 느낌 연출
@@ -75,10 +75,10 @@ export default function Visualizer({ analyserRef, palette, mode, isPlaying }) {
       const peaks = peaksRef.current;
 
       const analyser = analyserRef.current;
-      const playing = isPlaying && analyser;
+      const live = active && analyser;
 
       // 1) 타깃 레벨 계산 -----------------------------------------
-      if (playing) {
+      if (live) {
         if (dataRef.current.length !== analyser.frequencyBinCount) {
           dataRef.current = new Uint8Array(analyser.frequencyBinCount);
         }

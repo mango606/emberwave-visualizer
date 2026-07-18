@@ -45,6 +45,12 @@ export function useAudioEngine() {
   const onEndedRef = useRef(() => {});
   const pendingPlayRef = useRef(null);
 
+  // 라이브 입력(시각화 전용, destination 에는 연결하지 않음)
+  const micStreamRef = useRef(null);
+  const micNodeRef = useRef(null);
+  const dispStreamRef = useRef(null);
+  const dispNodeRef = useRef(null);
+
   const [state, setState] = useState({
     tracks: [], // UI 표시용: [{ id, name, duration }]
     currentIndex: -1,
@@ -53,6 +59,9 @@ export function useAudioEngine() {
     isPlaying: false,
     currentTime: 0,
     duration: 0,
+    micOn: false, // 마이크 입력 활성 여부
+    tabOn: false, // 탭/화면 오디오 공유 활성 여부
+    inputError: '', // 라이브 입력 오류 메시지
   });
 
   /** tracksRef / indexRef 의 최신 상태를 UI state 에 반영 */
@@ -90,6 +99,8 @@ export function useAudioEngine() {
       el.removeEventListener('pause', onPause);
       el.removeEventListener('ended', onEnded);
       tracksRef.current.forEach((t) => URL.revokeObjectURL(t.url));
+      micStreamRef.current?.getTracks().forEach((t) => t.stop());
+      dispStreamRef.current?.getTracks().forEach((t) => t.stop());
       ctxRef.current?.close();
     };
   }, []);
@@ -109,9 +120,14 @@ export function useAudioEngine() {
     const gain = ctx.createGain();
     gain.gain.value = 0.9;
 
-    source.connect(analyser);
-    analyser.connect(gain);
+    // 음악 경로와 시각화 탭을 분리한다.
+    //  - 가청 경로: source → gain(볼륨) → destination
+    //  - 시각화 탭: source → analyser (analyser 는 destination 으로 잇지 않음)
+    // analyser 를 출력에 연결하지 않으므로, 이후 마이크·탭 소리를 analyser 에
+    // 붙여도 스피커로 되돌아가는 하울링/에코가 생기지 않는다.
+    source.connect(gain);
     gain.connect(ctx.destination);
+    source.connect(analyser);
 
     ctxRef.current = ctx;
     sourceRef.current = source;
@@ -314,6 +330,81 @@ export function useAudioEngine() {
     if (gainRef.current) gainRef.current.gain.value = v;
   }, []);
 
+  /**
+   * 마이크 입력을 analyser 에 연결/해제한다(시각화 전용, 재생 안 함).
+   * 원신호를 그대로 쓰기 위해 에코 제거·노이즈 억제·자동 게인을 끈다.
+   */
+  const toggleMic = useCallback(async () => {
+    if (micStreamRef.current) {
+      micNodeRef.current?.disconnect();
+      micStreamRef.current.getTracks().forEach((t) => t.stop());
+      micNodeRef.current = null;
+      micStreamRef.current = null;
+      setState((s) => ({ ...s, micOn: false }));
+      return;
+    }
+    try {
+      ensureGraph();
+      if (ctxRef.current?.state === 'suspended') await ctxRef.current.resume();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      });
+      const node = ctxRef.current.createMediaStreamSource(stream);
+      node.connect(analyserRef.current); // analyser 로만 연결(출력 X)
+      micStreamRef.current = stream;
+      micNodeRef.current = node;
+      setState((s) => ({ ...s, micOn: true, inputError: '' }));
+    } catch {
+      setState((s) => ({ ...s, inputError: '마이크 권한이 거부되었거나 사용할 수 없습니다.' }));
+    }
+  }, [ensureGraph]);
+
+  /**
+   * 탭/화면 오디오 공유를 analyser 에 연결/해제한다.
+   * 이 탭을 공유하면 내부 유튜브 iframe 오디오까지 캡처되어 바가 반응한다.
+   * (Chromium 계열에서 '탭 오디오 공유' 지원. 영상 트랙은 즉시 정지한다.)
+   */
+  const toggleTab = useCallback(async () => {
+    if (dispStreamRef.current) {
+      dispNodeRef.current?.disconnect();
+      dispStreamRef.current.getTracks().forEach((t) => t.stop());
+      dispNodeRef.current = null;
+      dispStreamRef.current = null;
+      setState((s) => ({ ...s, tabOn: false }));
+      return;
+    }
+    try {
+      ensureGraph();
+      if (ctxRef.current?.state === 'suspended') await ctxRef.current.resume();
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      const audioTracks = stream.getAudioTracks();
+      if (!audioTracks.length) {
+        stream.getTracks().forEach((t) => t.stop());
+        setState((s) => ({
+          ...s,
+          inputError: "오디오가 캡처되지 않았습니다. 공유 창에서 '탭 오디오도 공유'를 체크해 주세요.",
+        }));
+        return;
+      }
+      stream.getVideoTracks().forEach((t) => t.stop()); // 영상은 불필요
+      const node = ctxRef.current.createMediaStreamSource(stream);
+      node.connect(analyserRef.current); // analyser 로만 연결(출력 X, 유튜브 소리는 원래대로 들림)
+      dispStreamRef.current = stream;
+      dispNodeRef.current = node;
+      // 사용자가 브라우저 UI 로 공유를 멈추면 자동 정리
+      audioTracks[0].addEventListener('ended', () => {
+        dispNodeRef.current?.disconnect();
+        dispNodeRef.current = null;
+        dispStreamRef.current = null;
+        setState((s) => ({ ...s, tabOn: false }));
+      });
+      setState((s) => ({ ...s, tabOn: true, inputError: '' }));
+    } catch {
+      // 사용자가 공유를 취소한 경우 등
+      setState((s) => ({ ...s, inputError: '탭 소리 공유가 취소되었거나 지원되지 않는 브라우저입니다.' }));
+    }
+  }, [ensureGraph]);
+
   const setAnalyserConfig = useCallback(({ fftSize, smoothing }) => {
     const a = analyserRef.current;
     if (!a) return;
@@ -335,5 +426,7 @@ export function useAudioEngine() {
     seek,
     setMusicVolume,
     setAnalyserConfig,
+    toggleMic,
+    toggleTab,
   };
 }

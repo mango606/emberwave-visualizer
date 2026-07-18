@@ -6,6 +6,7 @@ import PalettePicker from './components/PalettePicker';
 import ModePicker from './components/ModePicker';
 import VolumeMixer from './components/VolumeMixer';
 import AsmrPlayer from './components/AsmrPlayer';
+import LiveInput from './components/LiveInput';
 import { useAudioEngine } from './hooks/useAudioEngine';
 import { PALETTES, DEFAULT_PALETTE_ID } from './constants/palettes';
 import { VISUAL_MODES, DEFAULT_MODE_ID } from './constants/visualModes';
@@ -73,7 +74,9 @@ export default function App() {
             analyserRef={engine.analyserRef}
             palette={palette}
             mode={mode}
-            isPlaying={engine.state.isPlaying}
+            active={
+              engine.state.isPlaying || engine.state.micOn || engine.state.tabOn
+            }
           />
         </section>
 
@@ -117,6 +120,19 @@ export default function App() {
               <Dot /> YOUTUBE 반복 재생
             </div>
             <AsmrPlayer volume={asmrVol} onInfo={setAsmrInfo} />
+          </div>
+
+          <div className="panel">
+            <div className="panel-label">
+              <Dot /> 라이브 입력 · 마이크 / 탭 소리
+            </div>
+            <LiveInput
+              micOn={engine.state.micOn}
+              tabOn={engine.state.tabOn}
+              error={engine.state.inputError}
+              onToggleMic={engine.toggleMic}
+              onToggleTab={engine.toggleTab}
+            />
           </div>
 
           <div className="panel">
