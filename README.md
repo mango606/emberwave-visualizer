@@ -8,6 +8,8 @@
 
 React · Vite · Web Audio API · Canvas · Tailwind CSS
 
+<img src="docs/screenshot.png" alt="Emberwave 스크린샷 - 오로라 블루 팔레트의 LED 이퀄라이저" width="800" />
+
 </div>
 
 ---
