@@ -40,6 +40,7 @@ export function useAudioEngine() {
   const analyserRef = useRef(null);
 
   const tracksRef = useRef([]); // [{ id, name, url, duration }]
+  const eqRef = useRef({ nodes: null, gains: { bass: 0, mid: 0, treble: 0 } }); // EQ 필터/보류값
   const indexRef = useRef(-1); // 현재 로드된 트랙의 위치
   const currentIdRef = useRef(null); // 현재 로드된 트랙의 id(위치 변화에도 유지)
   const idSeqRef = useRef(0); // 트랙 id 시퀀스
@@ -128,14 +129,36 @@ export function useAudioEngine() {
     const gain = ctx.createGain();
     gain.gain.value = 0.9;
 
-    // 음악 경로와 시각화 탭을 분리한다.
-    //  - 가청 경로: source → gain(볼륨) → destination
-    //  - 시각화 탭: source → analyser (analyser 는 destination 으로 잇지 않음)
-    // analyser 를 출력에 연결하지 않으므로, 이후 마이크·탭 소리를 analyser 에
-    // 붙여도 스피커로 되돌아가는 하울링/에코가 생기지 않는다.
-    source.connect(gain);
+    // 3밴드 EQ(음질 조정): 저음(lowshelf) → 중음(peaking) → 고음(highshelf)
+    // 각 밴드는 dB 단위 게인으로 조절한다. 그래프 생성 전에 설정된 값이 있으면
+    // (eqRef.gains) 여기서 한 번에 반영한다.
+    const bass = ctx.createBiquadFilter();
+    bass.type = 'lowshelf';
+    bass.frequency.value = 200; // 200Hz 이하 저역
+    const mid = ctx.createBiquadFilter();
+    mid.type = 'peaking';
+    mid.frequency.value = 1000; // 1kHz 중심 중역
+    mid.Q.value = 1;
+    const treble = ctx.createBiquadFilter();
+    treble.type = 'highshelf';
+    treble.frequency.value = 3200; // 3.2kHz 이상 고역
+    const g = eqRef.current.gains;
+    bass.gain.value = g.bass;
+    mid.gain.value = g.mid;
+    treble.gain.value = g.treble;
+    eqRef.current.nodes = { bass, mid, treble };
+
+    // 가청 경로와 시각화 탭 분리:
+    //  - 가청: source → EQ(bass→mid→treble) → gain(볼륨) → destination
+    //  - 시각화: treble(EQ 통과 후) → analyser (destination 미연결)
+    // analyser 를 EQ 뒤에 두어, 음질 조정 결과가 LED 바에도 그대로 반영된다.
+    // 마이크·탭 소리는 이후 analyser 에 직접 합류해도 출력으로 새지 않는다.
+    source.connect(bass);
+    bass.connect(mid);
+    mid.connect(treble);
+    treble.connect(gain);
     gain.connect(ctx.destination);
-    source.connect(analyser);
+    treble.connect(analyser);
 
     ctxRef.current = ctx;
     sourceRef.current = source;
@@ -492,6 +515,26 @@ export function useAudioEngine() {
     }
   }, [ensureGraph]);
 
+  /**
+   * 3밴드 EQ 게인 설정(dB, -12 ~ +12 권장).
+   * 그래프 생성 전이면 값만 보관했다가 ensureGraph 에서 반영하고,
+   * 생성 후에는 setTargetAtTime 으로 클릭 노이즈 없이 부드럽게 전환한다.
+   */
+  const setEq = useCallback(({ bass, mid, treble }) => {
+    const gains = eqRef.current.gains;
+    if (typeof bass === 'number') gains.bass = bass;
+    if (typeof mid === 'number') gains.mid = mid;
+    if (typeof treble === 'number') gains.treble = treble;
+
+    const nodes = eqRef.current.nodes;
+    const ctx = ctxRef.current;
+    if (!nodes || !ctx) return;
+    const t = ctx.currentTime;
+    nodes.bass.gain.setTargetAtTime(gains.bass, t, 0.05);
+    nodes.mid.gain.setTargetAtTime(gains.mid, t, 0.05);
+    nodes.treble.gain.setTargetAtTime(gains.treble, t, 0.05);
+  }, []);
+
   const setAnalyserConfig = useCallback(({ fftSize, smoothing }) => {
     const a = analyserRef.current;
     if (!a) return;
@@ -512,6 +555,7 @@ export function useAudioEngine() {
     removeTrack,
     seek,
     setMusicVolume,
+    setEq,
     setAnalyserConfig,
     toggleMic,
     toggleTab,

@@ -1,5 +1,5 @@
 /**
- * 12가지 LED 색상 팔레트.
+ * LED 색상 팔레트 (18가지).
  *
  * 설계 의도(디자인 패턴): 렌더링 로직과 색상 데이터를 분리해서,
  * 비주얼라이저는 "팔레트라는 데이터"만 소비하도록 한다(데이터 주도 렌더링).
@@ -23,6 +23,13 @@ export const PALETTES = [
   { id: 'emerald', nameKo: '에메랄드', stops: ['#063d2e', '#2ee6a6'], swatch: '#2ee6a6' },
   // 클래식 VU 미터 감성: 아래는 안전(초록) → 위로 갈수록 경고(빨강)
   { id: 'vu-classic', nameKo: '클래식 VU', stops: ['#22c55e', '#eab308', '#f97316', '#ef4444'], swatch: '#eab308' },
+  { id: 'rose', nameKo: '로즈 핑크', stops: ['#5c0f2e', '#ff5c8a', '#ffc2d4'], swatch: '#ff5c8a' },
+  { id: 'mint', nameKo: '민트', stops: ['#0b4438', '#3ddbb4', '#c9fff0'], swatch: '#3ddbb4' },
+  { id: 'lavender', nameKo: '라벤더', stops: ['#3a2a63', '#a78bfa', '#e6dcff'], swatch: '#a78bfa' },
+  { id: 'cobalt', nameKo: '코발트 블루', stops: ['#0a1f5c', '#2f5eff', '#8fb0ff'], swatch: '#2f5eff' },
+  { id: 'peach', nameKo: '피치', stops: ['#6b2a14', '#ff9e6b', '#ffd9b8'], swatch: '#ff9e6b' },
+  // 모노톤 계기판: 색 없이 밝기만으로 표현하는 담백한 옵션
+  { id: 'steel', nameKo: '스틸 그레이', stops: ['#3a3f4a', '#9aa4b5', '#e6ebf2'], swatch: '#9aa4b5' },
 ];
 
 export const DEFAULT_PALETTE_ID = 'amber'; // '불멍' 콘셉트에 맞는 잉걸불 톤을 기본값으로

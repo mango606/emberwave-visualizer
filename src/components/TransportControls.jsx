@@ -45,10 +45,10 @@ export default function TransportControls({
 
   return (
     <div className="space-y-3">
-      {/* 현재 곡 표시 */}
+      {/* 현재 곡 표시(확장자 가림) */}
       {state.fileName && (
         <div className="truncate rounded-lg border border-ink-600/60 bg-ink-700/50 px-3 py-2 text-sm text-white">
-          {state.fileName}
+          {state.fileName.replace(/\.[^.]+$/, '')}
         </div>
       )}
 

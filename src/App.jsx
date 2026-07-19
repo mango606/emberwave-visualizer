@@ -5,6 +5,7 @@ import Playlist from './components/Playlist';
 import PalettePicker from './components/PalettePicker';
 import ModePicker from './components/ModePicker';
 import VolumeMixer from './components/VolumeMixer';
+import EqControls from './components/EqControls';
 import AsmrPlayer from './components/AsmrPlayer';
 import LiveInput from './components/LiveInput';
 import { useAudioEngine } from './hooks/useAudioEngine';
@@ -14,13 +15,14 @@ import { watchUrl } from './lib/youtube';
 
 export default function App() {
   const engine = useAudioEngine();
-  const { setAnalyserConfig, setMusicVolume } = engine;
+  const { setAnalyserConfig, setMusicVolume, setEq: applyEq } = engine;
   const isPlaying = engine.state.isPlaying;
 
   const [paletteId, setPaletteId] = useState(DEFAULT_PALETTE_ID);
   const [modeId, setModeId] = useState(DEFAULT_MODE_ID);
   const [musicVol, setMusicVol] = useState(90);
   const [asmrVol, setAsmrVol] = useState(45);
+  const [eq, setEq] = useState({ bass: 0, mid: 0, treble: 0 }); // 3밴드 EQ(dB)
   const [asmrInfo, setAsmrInfo] = useState(null); // { id, title } | null
 
   const palette = useMemo(
@@ -43,6 +45,11 @@ export default function App() {
   useEffect(() => {
     setMusicVolume(musicVol / 100);
   }, [musicVol, setMusicVolume]);
+
+  // EQ(저음/중음/고음 dB)를 BiquadFilter 체인에 반영
+  useEffect(() => {
+    applyEq(eq);
+  }, [eq, applyEq]);
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-ink-900">
@@ -92,6 +99,10 @@ export default function App() {
               onSeek={engine.seek}
               onPrev={engine.prev}
               onNext={engine.next}
+              fsaSupported={engine.fsaSupported}
+              onConnectFolder={engine.connectFolder}
+              onSyncFolder={engine.syncFolder}
+              onDisconnectFolder={engine.disconnectFolder}
             />
             <Playlist
               tracks={engine.state.tracks}
@@ -113,6 +124,13 @@ export default function App() {
               onMusic={setMusicVol}
               onAsmr={setAsmrVol}
             />
+          </div>
+
+          <div className="panel">
+            <div className="panel-label">
+              <Dot /> 음질 조정
+            </div>
+            <EqControls eq={eq} onChange={setEq} />
           </div>
 
           <div className="panel">

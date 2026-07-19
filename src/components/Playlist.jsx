@@ -8,6 +8,11 @@ function fmt(sec) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+/** 표시용 제목: 파일 확장자(.mp3, .m4a 등)를 가린다 */
+function stripExt(name) {
+  return name.replace(/\.[^.]+$/, '');
+}
+
 /**
  * Playlist
  * -------------------------------------------------------------
@@ -77,7 +82,7 @@ export default function Playlist({ tracks, currentIndex, onSelect, onRemove, onR
                 <span className="w-3 shrink-0 text-right font-mono text-[10px]">
                   {active ? '▶' : i + 1}
                 </span>
-                <span className="truncate">{t.name}</span>
+                <span className="truncate">{stripExt(t.name)}</span>
               </button>
 
               <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted">
@@ -86,7 +91,7 @@ export default function Playlist({ tracks, currentIndex, onSelect, onRemove, onR
 
               <button
                 onClick={() => onRemove(i)}
-                aria-label={`${t.name} 삭제`}
+                aria-label={`${stripExt(t.name)} 삭제`}
                 className="shrink-0 text-muted opacity-0 transition hover:text-[#ff6b6b] focus:opacity-100 group-hover:opacity-100"
               >
                 <XIcon />
