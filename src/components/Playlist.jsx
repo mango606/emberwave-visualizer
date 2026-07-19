@@ -33,6 +33,12 @@ export default function Playlist({ tracks, currentIndex, onSelect, onRemove, onR
   const confirmTimerRef = useRef(null);
   useEffect(() => () => clearTimeout(confirmTimerRef.current), []);
 
+  // 행별 액션 열림 상태: 그립(⋮⋮)을 탭하면 해당 행의 이동/삭제 버튼이 나타난다.
+  // 주의: 모든 훅은 아래 early return 보다 반드시 먼저 호출되어야 한다.
+  // (조건부 반환 뒤에 훅을 두면 목록이 비었다 채워질 때 훅 개수가 달라져
+  //  React error #310 으로 전체 트리가 크래시한다)
+  const [openIndex, setOpenIndex] = useState(null);
+
   if (!tracks.length) return null;
 
   const drop = (to) => {
@@ -41,10 +47,7 @@ export default function Playlist({ tracks, currentIndex, onSelect, onRemove, onR
     setOverIndex(null);
   };
 
-  // 행별 액션 열림 상태: 그립(⋮⋮)을 탭하면 해당 행의 이동/삭제 버튼이 나타난다.
-  // 터치 기기의 hover 부재와 드래그 미지원(HTML5 DnD)을 동시에 해결한다.
-  const [openIndex, setOpenIndex] = useState(null);
-
+  // 행별 액션 열림 상태 관련 핸들러 (상태 선언은 early return 위에 있음)
   const moveUp = (i) => {
     if (i <= 0) return;
     onReorder(i, i - 1);
