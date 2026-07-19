@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { isMobile } from '../lib/platform';
 
 /** mm:ss 포맷 */
 function fmt(t) {
@@ -23,6 +24,7 @@ export default function TransportControls({
   onConnectFolder,
   onSyncFolder,
   onDisconnectFolder,
+  onNotice,
 }) {
   const fileRef = useRef(null);
   const dirRef = useRef(null);
@@ -34,8 +36,15 @@ export default function TransportControls({
     e.target.value = ''; // 같은 파일 재선택 가능하도록 초기화
   };
 
-  /** FSA 지원 시 폴더 핸들 연결(자동 동기화), 미지원 시 스냅샷 폴백 */
+  /**
+   * 폴더 연결: 모바일은 폴더 선택 자체가 미지원이라 안내만 하고,
+   * FSA 지원 시 핸들 연결(자동 동기화), 미지원 데스크톱은 스냅샷 폴백.
+   */
   const handleFolderClick = async () => {
+    if (isMobile()) {
+      onNotice?.('폴더 연결은 PC에서만 지원됩니다. 파일 추가를 이용해 주세요.');
+      return;
+    }
     if (fsaSupported) {
       await onConnectFolder();
     } else {

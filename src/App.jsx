@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Visualizer from './components/Visualizer';
 import TransportControls from './components/TransportControls';
 import Playlist from './components/Playlist';
@@ -43,6 +43,15 @@ export default function App() {
       : { bass: 0, mid: 0, treble: 0 };
   });
   const [asmrInfo, setAsmrInfo] = useState(null); // { id, title } | null
+
+  // 안내 토스트: 미지원 기능 클릭 시 등에 짧게 표시 후 자동 소멸
+  const [toast, setToast] = useState('');
+  const toastTimerRef = useRef(null);
+  const showToast = useCallback((msg) => {
+    setToast(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(''), 2600);
+  }, []);
 
   // 설정 변경 시마다 저장(작은 객체라 디바운스 불필요)
   useEffect(() => {
@@ -127,6 +136,7 @@ export default function App() {
               onConnectFolder={engine.connectFolder}
               onSyncFolder={engine.syncFolder}
               onDisconnectFolder={engine.disconnectFolder}
+              onNotice={showToast}
             />
             <Playlist
               tracks={engine.state.tracks}
@@ -174,6 +184,7 @@ export default function App() {
               error={engine.state.inputError}
               onToggleMic={engine.toggleMic}
               onToggleTab={engine.toggleTab}
+              onNotice={showToast}
             />
           </div>
 
@@ -192,6 +203,16 @@ export default function App() {
           </div>
         </aside>
       </main>
+
+      {/* 안내 토스트 */}
+      {toast && (
+        <div
+          role="status"
+          className="fixed bottom-14 left-1/2 z-20 -translate-x-1/2 rounded-full border border-ink-600 bg-ink-800/95 px-4 py-2 text-xs text-white shadow-panel backdrop-blur"
+        >
+          {toast}
+        </div>
+      )}
 
       {/* 출처 크레딧: 재생 중인 ASMR 원본 표기 (좌하단 고정) */}
       {asmrInfo?.title && (

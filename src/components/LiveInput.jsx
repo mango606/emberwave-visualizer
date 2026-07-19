@@ -8,12 +8,21 @@
  * 유튜브 iframe 오디오는 cross-origin 이라 직접 연결할 수 없어, '탭 소리' 공유가
  * 유튜브 사운드를 시각화하는 현실적인 경로임을 안내 문구로 함께 노출한다.
  */
-export default function LiveInput({ micOn, tabOn, error, onToggleMic, onToggleTab }) {
+export default function LiveInput({ micOn, tabOn, error, onToggleMic, onToggleTab, onNotice }) {
+  /** 탭 소리: getDisplayMedia 미지원(모바일 등) 환경이면 안내만 표시 */
+  const handleTab = () => {
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      onNotice?.('탭 소리 공유는 PC 브라우저에서만 지원됩니다.');
+      return;
+    }
+    onToggleTab();
+  };
+
   return (
     <div>
       <div className="grid grid-cols-2 gap-2">
         <Toggle active={micOn} onClick={onToggleMic} icon={<MicIcon />} label="마이크" />
-        <Toggle active={tabOn} onClick={onToggleTab} icon={<TabIcon />} label="탭 소리" />
+        <Toggle active={tabOn} onClick={handleTab} icon={<TabIcon />} label="탭 소리" />
       </div>
 
       {error && <p className="mt-2 text-xs text-[#ff6b6b]">{error}</p>}

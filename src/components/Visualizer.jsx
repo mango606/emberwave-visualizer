@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { rgba, sampleGradient } from '../lib/colorUtils';
 
 /**
@@ -25,6 +25,26 @@ export default function Visualizer({ analyserRef, palette, mode, active }) {
   const sizeRef = useRef({ w: 0, h: 0, dpr: 1 });
   const lastDrawRef = useRef(0);
   const startRef = useRef(performance.now());
+
+  // 앰비언트(전체화면) 모드: 우측 하단 호버 버튼으로 진입/해제
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await wrapRef.current?.requestFullscreen();
+      }
+    } catch {
+      // iOS Safari 등 미지원 환경은 조용히 무시
+    }
+  };
 
   // 최신 props 를 루프에서 참조할 수 있도록 동기화
   useEffect(() => {
@@ -143,7 +163,36 @@ export default function Visualizer({ analyserRef, palette, mode, active }) {
       className="relative h-full w-full overflow-hidden rounded-2xl border border-ink-600/50 bg-black"
     >
       <canvas ref={canvasRef} className="block h-full w-full" />
+
+      {/* 앰비언트(전체화면) 진입 버튼: 평소엔 숨겨져 있다가
+          우측 하단 영역에 마우스를 올리면 나타나 감상을 방해하지 않는다.
+          키보드 사용자를 위해 포커스 시에도 표시(focus-visible). */}
+      <div className="group absolute bottom-0 right-0 z-10 h-24 w-24">
+        <button
+          onClick={toggleFullscreen}
+          aria-label={isFullscreen ? '전체화면 종료' : '전체화면으로 감상'}
+          title={isFullscreen ? '전체화면 종료' : '전체화면으로 감상'}
+          className="absolute bottom-3 right-3 grid h-9 w-9 place-items-center rounded-full border border-ink-600 bg-ink-800/80 text-muted opacity-0 backdrop-blur transition duration-300 hover:text-white focus-visible:opacity-100 group-hover:opacity-100"
+        >
+          {isFullscreen ? <CompressIcon /> : <ExpandIcon />}
+        </button>
+      </div>
     </div>
+  );
+}
+
+function ExpandIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" />
+    </svg>
+  );
+}
+function CompressIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3" />
+    </svg>
   );
 }
 

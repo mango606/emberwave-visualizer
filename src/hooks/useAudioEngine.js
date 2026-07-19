@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { scanAudioFiles, supportsFSA } from '../lib/fileSystem';
+import { saveTrack, deleteTrack, saveOrder, loadAllTracks } from '../lib/trackStore';
 
 /**
  * 파일의 재생 길이(초)를 비동기로 측정한다.
@@ -13,6 +14,14 @@ function probeDuration(url) {
     a.addEventListener('loadedmetadata', () => resolve(a.duration || 0), { once: true });
     a.addEventListener('error', () => resolve(0), { once: true });
   });
+}
+
+/** 영구 트랙 id: 세션이 바뀌어도 유지되는 IndexedDB 키로 쓴다 */
+let uidSeq = 0;
+function newUid() {
+  return typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${++uidSeq}`;
 }
 
 /**
@@ -44,7 +53,6 @@ export function useAudioEngine() {
   const volumeRef = useRef(0.5); // 그래프 생성 전 설정된 볼륨 보류값(기본 50%)
   const indexRef = useRef(-1); // 현재 로드된 트랙의 위치
   const currentIdRef = useRef(null); // 현재 로드된 트랙의 id(위치 변화에도 유지)
-  const idSeqRef = useRef(0); // 트랙 id 시퀀스
   const onEndedRef = useRef(() => {});
   const pendingPlayRef = useRef(null);
 
@@ -202,22 +210,32 @@ export function useAudioEngine() {
     [ensureGraph],
   );
 
+  /** 현재 재생 순서를 IndexedDB 에 저장(실패 무시) */
+  const persistOrder = useCallback(() => {
+    saveOrder(tracksRef.current.map((t) => t.id)).catch(() => {});
+  }, []);
+
   /**
    * File 배열을 재생목록 뒤에 이어 붙이는 공용 헬퍼.
    * 파일 선택·폴더 스냅샷·FSA 폴더 스캔 모두 이 경로를 거친다.
-   * 목록이 비어 있었다면 첫 곡을 로드해 재생 준비 상태로 만든다.
+   * persist=true 면 파일 원본(Blob)을 IndexedDB 에 저장해 새로고침 후 복원한다.
    */
   const appendTracks = useCallback(
-    (files) => {
+    (files, { persist = true } = {}) => {
       if (!files.length) return [];
       const wasEmpty = tracksRef.current.length === 0;
       const added = files.map((f) => ({
-        id: ++idSeqRef.current,
+        id: newUid(),
         name: f.name,
         url: URL.createObjectURL(f),
         duration: 0,
       }));
       tracksRef.current = [...tracksRef.current, ...added];
+
+      if (persist) {
+        files.forEach((f, i) => saveTrack(added[i].id, { name: f.name, blob: f }).catch(() => {}));
+        persistOrder();
+      }
 
       if (wasEmpty) {
         indexRef.current = 0;
@@ -240,7 +258,7 @@ export function useAudioEngine() {
       });
       return added;
     },
-    [loadIndex, syncTracks],
+    [loadIndex, syncTracks, persistOrder],
   );
 
   /**
@@ -374,7 +392,8 @@ export function useAudioEngine() {
     }
     indexRef.current = tracks.findIndex((x) => x.id === currentIdRef.current);
     syncTracks();
-  }, [syncTracks]);
+    persistOrder();
+  }, [syncTracks, persistOrder]);
 
   /** 드래그 순서 변경: from 위치의 트랙을 to 위치로 이동 */
   const reorderTracks = useCallback(
@@ -385,8 +404,9 @@ export function useAudioEngine() {
       tracks.splice(to, 0, moved);
       indexRef.current = tracks.findIndex((x) => x.id === currentIdRef.current);
       syncTracks();
+      persistOrder();
     },
-    [syncTracks],
+    [syncTracks, persistOrder],
   );
 
   /** 트랙 삭제 */
@@ -399,6 +419,8 @@ export function useAudioEngine() {
       const el = audioElRef.current;
       URL.revokeObjectURL(target.url);
       tracks.splice(i, 1);
+      deleteTrack(target.id).catch(() => {});
+      persistOrder();
 
       if (tracks.length === 0) {
         // 목록이 비면 재생 정지 및 초기화
@@ -429,13 +451,56 @@ export function useAudioEngine() {
       }
       syncTracks();
     },
-    [loadIndex, syncTracks],
+    [loadIndex, syncTracks, persistOrder],
   );
 
   const seek = useCallback((time) => {
     const el = audioElRef.current;
     if (el?.src) el.currentTime = time;
   }, []);
+
+  /**
+   * 마운트 시 1회: IndexedDB 에 저장된 재생목록을 복원한다.
+   * 저장된 uid 를 그대로 유지해야 이후 삭제·순서 변경이 같은 키로 반영된다.
+   * (appendTracks 를 쓰지 않는 이유: 새 uid 발급 + Blob 재저장 낭비 방지)
+   */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { order, records } = await loadAllTracks();
+        if (cancelled || !order.length || tracksRef.current.length) return;
+        const restored = order
+          .map((uid) => {
+            const r = records.get(uid);
+            return r ? { id: uid, name: r.name, url: URL.createObjectURL(r.blob), duration: 0 } : null;
+          })
+          .filter(Boolean);
+        if (!restored.length) return;
+
+        tracksRef.current = restored;
+        indexRef.current = 0;
+        currentIdRef.current = restored[0].id;
+        syncTracks();
+        loadIndex(0, false); // 자동 재생은 하지 않음(오토플레이 정책 + 사용자 의사 존중)
+
+        restored.forEach((t) => {
+          probeDuration(t.url).then((d) => {
+            t.duration = d;
+            setState((s) => ({
+              ...s,
+              tracks: s.tracks.map((x) => (x.id === t.id ? { ...x, duration: d } : x)),
+            }));
+          });
+        });
+      } catch {
+        // 저장소 접근 불가 환경은 조용히 빈 목록으로 시작
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [syncTracks, loadIndex]);
 
   /**
    * Media Session API: 모바일에서 화면을 끄거나 다른 앱으로 전환해도
