@@ -41,6 +41,7 @@ export function useAudioEngine() {
 
   const tracksRef = useRef([]); // [{ id, name, url, duration }]
   const eqRef = useRef({ nodes: null, gains: { bass: 0, mid: 0, treble: 0 } }); // EQ 필터/보류값
+  const volumeRef = useRef(0.5); // 그래프 생성 전 설정된 볼륨 보류값(기본 50%)
   const indexRef = useRef(-1); // 현재 로드된 트랙의 위치
   const currentIdRef = useRef(null); // 현재 로드된 트랙의 id(위치 변화에도 유지)
   const idSeqRef = useRef(0); // 트랙 id 시퀀스
@@ -127,7 +128,7 @@ export function useAudioEngine() {
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0.85;
     const gain = ctx.createGain();
-    gain.gain.value = 0.9;
+    gain.gain.value = volumeRef.current; // 그래프 생성 전 설정된 볼륨을 그대로 반영
 
     // 3밴드 EQ(음질 조정): 저음(lowshelf) → 중음(peaking) → 고음(highshelf)
     // 각 밴드는 dB 단위 게인으로 조절한다. 그래프 생성 전에 설정된 값이 있으면
@@ -436,7 +437,9 @@ export function useAudioEngine() {
     if (el?.src) el.currentTime = time;
   }, []);
 
+  /** 음악 볼륨(0~1). 그래프 생성 전이면 보류값으로 저장했다가 생성 시 반영 */
   const setMusicVolume = useCallback((v) => {
+    volumeRef.current = v;
     if (gainRef.current) gainRef.current.gain.value = v;
   }, []);
 

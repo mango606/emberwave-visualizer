@@ -20,7 +20,7 @@ export default function App() {
 
   const [paletteId, setPaletteId] = useState(DEFAULT_PALETTE_ID);
   const [modeId, setModeId] = useState(DEFAULT_MODE_ID);
-  const [musicVol, setMusicVol] = useState(90);
+  const [musicVol, setMusicVol] = useState(50); // 음악 볼륨 기본값 50
   const [asmrVol, setAsmrVol] = useState(50); // 유튜브 볼륨 기본값 50
   const [eq, setEq] = useState({ bass: 0, mid: 0, treble: 0 }); // 3밴드 EQ(dB)
   const [asmrInfo, setAsmrInfo] = useState(null); // { id, title } | null

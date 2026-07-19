@@ -36,7 +36,7 @@
     @apply rounded-2xl border border-ink-600/60 bg-ink-800 p-4 shadow-panel;
   }
   .panel-label {
-    @apply mb-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-muted;
+    @apply mb-3 flex items-center gap-2 font-mono text-xs font-semibold uppercase tracking-[0.14em] text-white/80;
   }
 }
 

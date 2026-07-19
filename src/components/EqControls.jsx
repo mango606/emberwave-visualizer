@@ -16,14 +16,6 @@ export const EQ_PRESETS = [
   { id: 'live', nameKo: '라이브', bass: 4, mid: 2, treble: 3 },
 ];
 
-function ResetIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M3 12a9 9 0 1 0 2.64-6.36M3 3v6h6" />
-    </svg>
-  );
-}
-
 const BANDS = [
   { key: 'bass', label: '저음' },
   { key: 'mid', label: '중음' },
@@ -36,41 +28,27 @@ export default function EqControls({ eq, onChange }) {
     EQ_PRESETS.find((p) => p.bass === eq.bass && p.mid === eq.mid && p.treble === eq.treble)?.id ??
     null;
 
-  /** 기본값(0,0,0)에서 벗어나 있는지: 초기화 버튼 활성 조건 */
-  const isDirty = eq.bass !== 0 || eq.mid !== 0 || eq.treble !== 0;
-
   return (
     <div className="space-y-4">
-      {/* 프리셋 + 초기화 */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex flex-wrap gap-1.5">
-          {EQ_PRESETS.map((p) => {
-            const active = p.id === activePreset;
-            return (
-              <button
-                key={p.id}
-                onClick={() => onChange({ bass: p.bass, mid: p.mid, treble: p.treble })}
-                aria-pressed={active}
-                className={`rounded-full border px-3 py-1 text-[11px] transition ${
-                  active
-                    ? 'border-ember bg-ember/15 text-ember-soft'
-                    : 'border-ink-600 text-muted hover:border-muted hover:text-white'
-                }`}
-              >
-                {p.nameKo}
-              </button>
-            );
-          })}
-        </div>
-        <button
-          onClick={() => onChange({ bass: 0, mid: 0, treble: 0 })}
-          disabled={!isDirty}
-          title="기본값으로 초기화"
-          aria-label="음질 기본값으로 초기화"
-          className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted transition hover:text-ember-soft disabled:opacity-30"
-        >
-          <ResetIcon /> 초기화
-        </button>
+      {/* 프리셋 */}
+      <div className="flex flex-wrap gap-1.5">
+        {EQ_PRESETS.map((p) => {
+          const active = p.id === activePreset;
+          return (
+            <button
+              key={p.id}
+              onClick={() => onChange({ bass: p.bass, mid: p.mid, treble: p.treble })}
+              aria-pressed={active}
+              className={`rounded-full border px-3 py-1 text-[11px] transition ${
+                active
+                  ? 'border-ember bg-ember/15 text-ember-soft'
+                  : 'border-ink-600 text-muted hover:border-muted hover:text-white'
+              }`}
+            >
+              {p.nameKo}
+            </button>
+          );
+        })}
       </div>
 
       {/* 3밴드 슬라이더 */}
