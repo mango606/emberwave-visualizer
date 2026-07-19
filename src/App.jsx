@@ -109,7 +109,7 @@ export default function App() {
       {/* 본문: 좌 비주얼라이저 / 우 컨트롤. 전체는 뷰포트에 고정되고
           컨트롤이 넘칠 때만 aside 내부에서 스크롤된다(페이지 스크롤 없음). */}
       <main className="flex min-h-0 flex-1 flex-col gap-4 px-4 pb-4 lg:flex-row">
-        <section className="h-[38vh] min-h-0 lg:h-auto lg:flex-1">
+        <section className="h-[38vh] min-h-0 min-w-0 lg:h-auto lg:flex-1">
           <Visualizer
             analyserRef={engine.analyserRef}
             palette={palette}

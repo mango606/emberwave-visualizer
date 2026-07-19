@@ -23,6 +23,7 @@ export default function Visualizer({ analyserRef, palette, mode, active }) {
   const peaksRef = useRef(new Float32Array(0)); // 피크 홀드 위치(0~1)
   const dataRef = useRef(new Uint8Array(0)); // 주파수 바이트 버퍼
   const sizeRef = useRef({ w: 0, h: 0, dpr: 1 });
+  const resizeFnRef = useRef(null); // 전체화면 전환 시 강제 리사이즈용
   const lastDrawRef = useRef(0);
   const startRef = useRef(performance.now());
 
@@ -35,7 +36,12 @@ export default function Visualizer({ analyserRef, palette, mode, active }) {
     document.fullscreenElement || document.webkitFullscreenElement || null;
 
   useEffect(() => {
-    const onChange = () => setIsFullscreen(Boolean(getFsElement()));
+    const onChange = () => {
+      setIsFullscreen(Boolean(getFsElement()));
+      // 전환 직후 레이아웃이 안정된 다음 프레임에 캔버스를 새 크기로 맞춘다.
+      // (일부 브라우저는 전체화면 전환에서 ResizeObserver 가 늦게/안 울릴 수 있음)
+      requestAnimationFrame(() => resizeFnRef.current?.());
+    };
     document.addEventListener('fullscreenchange', onChange);
     document.addEventListener('webkitfullscreenchange', onChange);
     return () => {
@@ -82,7 +88,11 @@ export default function Visualizer({ analyserRef, palette, mode, active }) {
     const ro = new ResizeObserver(resize);
     ro.observe(wrap);
     resize();
-    return () => ro.disconnect();
+    resizeFnRef.current = resize; // 전체화면 전환 핸들러에서 재사용
+    return () => {
+      ro.disconnect();
+      resizeFnRef.current = null;
+    };
   }, []);
 
   // 메인 애니메이션 루프 (마운트 시 1회 시작)
