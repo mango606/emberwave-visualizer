@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /** 초 → m:ss (측정 전이면 --:--) */
 function fmt(sec) {
@@ -26,6 +26,13 @@ export default function Playlist({ tracks, currentIndex, onSelect, onRemove, onR
   const [dragIndex, setDragIndex] = useState(null);
   const [overIndex, setOverIndex] = useState(null);
 
+  // 전체 비우기 2단계 확인: window.confirm 은 메인 스레드를 막아 INP 지표를
+  // 해치므로, 버튼 자체가 확인 상태로 바뀌는 논블로킹 패턴을 쓴다.
+  // 첫 클릭 → 4초간 확인 모드, 그 안에 다시 클릭 → 실행, 방치 → 자동 복귀.
+  const [confirmClear, setConfirmClear] = useState(false);
+  const confirmTimerRef = useRef(null);
+  useEffect(() => () => clearTimeout(confirmTimerRef.current), []);
+
   if (!tracks.length) return null;
 
   const drop = (to) => {
@@ -34,11 +41,15 @@ export default function Playlist({ tracks, currentIndex, onSelect, onRemove, onR
     setOverIndex(null);
   };
 
-  /** 파괴적 동작이므로 브라우저 확인 창을 거친 뒤 실행한다 */
-  const clearAll = () => {
-    if (window.confirm('재생목록과 브라우저에 저장된 음악 파일을 모두 삭제할까요?')) {
-      onClearAll();
+  const handleClear = () => {
+    if (!confirmClear) {
+      setConfirmClear(true);
+      confirmTimerRef.current = setTimeout(() => setConfirmClear(false), 4000);
+      return;
     }
+    clearTimeout(confirmTimerRef.current);
+    setConfirmClear(false);
+    onClearAll();
   };
 
   return (
@@ -56,11 +67,15 @@ export default function Playlist({ tracks, currentIndex, onSelect, onRemove, onR
             <ShuffleIcon /> 셔플
           </button>
           <button
-            onClick={clearAll}
+            onClick={handleClear}
             title="재생목록과 저장 데이터 전체 삭제"
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted transition hover:text-[#ff6b6b]"
+            className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] transition ${
+              confirmClear
+                ? 'bg-[#ff6b6b]/15 text-[#ff6b6b]'
+                : 'text-muted hover:text-[#ff6b6b]'
+            }`}
           >
-            <TrashIcon /> 비우기
+            <TrashIcon /> {confirmClear ? '한 번 더 누르면 삭제' : '비우기'}
           </button>
         </div>
       </div>
