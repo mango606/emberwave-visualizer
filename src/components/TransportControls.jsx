@@ -14,6 +14,7 @@ function fmt(t) {
  */
 export default function TransportControls({ state, onFiles, onToggle, onSeek, onPrev, onNext }) {
   const fileRef = useRef(null);
+  const dirRef = useRef(null);
   const hasTracks = state.tracks.length > 0;
   const multi = state.tracks.length > 1;
 
@@ -24,21 +25,43 @@ export default function TransportControls({ state, onFiles, onToggle, onSeek, on
 
   return (
     <div className="space-y-3">
-      {/* 파일 선택 (여러 개) */}
-      <button
-        onClick={() => fileRef.current?.click()}
-        className="w-full truncate rounded-lg border border-ink-600 bg-ink-700 px-3 py-2.5 text-left text-sm transition hover:border-muted"
-      >
-        {state.fileName ? (
-          <span className="truncate text-white">{state.fileName}</span>
-        ) : (
-          <span className="text-muted">MP3 파일 선택 (여러 개 가능)…</span>
-        )}
-      </button>
+      {/* 현재 곡 표시 */}
+      {state.fileName && (
+        <div className="truncate rounded-lg border border-ink-600/60 bg-ink-700/50 px-3 py-2 text-sm text-white">
+          {state.fileName}
+        </div>
+      )}
+
+      {/* 파일 추가 / 폴더 연결 */}
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={() => fileRef.current?.click()}
+          className="flex items-center justify-center gap-1.5 rounded-lg border border-ink-600 bg-ink-700 px-3 py-2.5 text-sm text-muted transition hover:border-muted hover:text-white"
+        >
+          <PlusIcon /> 파일 추가
+        </button>
+        <button
+          onClick={() => dirRef.current?.click()}
+          className="flex items-center justify-center gap-1.5 rounded-lg border border-ink-600 bg-ink-700 px-3 py-2.5 text-sm text-muted transition hover:border-muted hover:text-white"
+        >
+          <FolderIcon /> 폴더 연결
+        </button>
+      </div>
       <input
         ref={fileRef}
         type="file"
         accept="audio/*"
+        multiple
+        onChange={pickFiles}
+        className="hidden"
+      />
+      {/* webkitdirectory: 폴더를 통째로 선택하면 하위 파일까지 FileList 로 전달된다.
+          엔진에서 오디오 파일만 필터링하므로 여기서는 그대로 넘긴다. */}
+      <input
+        ref={dirRef}
+        type="file"
+        webkitdirectory=""
+        directory=""
         multiple
         onChange={pickFiles}
         className="hidden"
@@ -92,6 +115,20 @@ export default function TransportControls({ state, onFiles, onToggle, onSeek, on
   );
 }
 
+function PlusIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+function FolderIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </svg>
+  );
+}
 function PlayIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

@@ -170,7 +170,12 @@ export function useAudioEngine() {
     [ensureGraph],
   );
 
-  /** 여러 파일을 받아 재생목록을 구성한다(오디오 파일만 필터링) */
+  /**
+   * 여러 파일을 받아 재생목록에 추가한다(오디오 파일만 필터링).
+   * 파일 선택과 폴더 연결(webkitdirectory) 양쪽에서 공용으로 사용하며,
+   * 기존 목록을 교체하지 않고 뒤에 이어 붙인다. 목록이 비어 있었다면
+   * 첫 곡을 로드해 재생 준비 상태로 만든다.
+   */
   const loadFiles = useCallback(
     (fileList) => {
       const files = Array.from(fileList || []).filter(
@@ -178,23 +183,28 @@ export function useAudioEngine() {
       );
       if (!files.length) return;
 
-      tracksRef.current.forEach((t) => URL.revokeObjectURL(t.url));
-      const tracks = files.map((f) => ({
+      const wasEmpty = tracksRef.current.length === 0;
+      const added = files.map((f) => ({
         id: ++idSeqRef.current,
         name: f.name,
         url: URL.createObjectURL(f),
         duration: 0,
       }));
-      tracksRef.current = tracks;
-      indexRef.current = 0;
-      currentIdRef.current = tracks[0].id;
-      syncTracks();
-      loadIndex(0, false); // 첫 곡은 로드만(재생은 사용자 클릭 때)
+      tracksRef.current = [...tracksRef.current, ...added];
 
-      // 각 트랙 길이를 비동기로 측정해 채워 넣는다
-      tracks.forEach((t) => {
+      if (wasEmpty) {
+        indexRef.current = 0;
+        currentIdRef.current = tracksRef.current[0].id;
+        syncTracks();
+        loadIndex(0, false); // 첫 곡은 로드만(재생은 사용자 클릭 때)
+      } else {
+        syncTracks();
+      }
+
+      // 새로 추가된 트랙의 길이를 비동기로 측정해 채워 넣는다
+      added.forEach((t) => {
         probeDuration(t.url).then((d) => {
-          t.duration = d; // ref 객체에 반영(이후 syncTracks 에서도 유지)
+          t.duration = d;
           setState((s) => ({
             ...s,
             tracks: s.tracks.map((x) => (x.id === t.id ? { ...x, duration: d } : x)),

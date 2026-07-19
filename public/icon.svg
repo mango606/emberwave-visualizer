@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Emberwave 아이콘: 어두운 배경 위 네온 앰버 LED 바 3개 -->
+  <defs>
+    <!-- 네온 글로우: 앰버 빛 번짐 -->
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="2.6" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <!-- 아래(진한 앰버) → 위(밝은 앰버) LED 그라디언트 -->
+    <linearGradient id="led" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#c47e00"/>
+      <stop offset="1" stop-color="#ffcf4d"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 배경: 라운드 사각, 딥 차콜 -->
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#0a0a0c"/>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="none" stroke="#ffb000" stroke-opacity="0.28" stroke-width="1.5"/>
+
+  <!-- LED 바 3개 (세그먼트 간격 포함, 높이 각기 다르게) -->
+  <g filter="url(#glow)">
+    <!-- 왼쪽 바: 3칸 -->
+    <rect x="12" y="40" width="10" height="6" rx="1.6" fill="url(#led)"/>
+    <rect x="12" y="32" width="10" height="6" rx="1.6" fill="url(#led)"/>
+    <rect x="12" y="24" width="10" height="6" rx="1.6" fill="url(#led)"/>
+    <!-- 가운데 바: 5칸 (가장 높음) -->
+    <rect x="27" y="40" width="10" height="6" rx="1.6" fill="url(#led)"/>
+    <rect x="27" y="32" width="10" height="6" rx="1.6" fill="url(#led)"/>
+    <rect x="27" y="24" width="10" height="6" rx="1.6" fill="url(#led)"/>
+    <rect x="27" y="16" width="10" height="6" rx="1.6" fill="url(#led)"/>
+    <rect x="27" y="8"  width="10" height="6" rx="1.6" fill="#ffe08a"/>
+    <!-- 오른쪽 바: 2칸 -->
+    <rect x="42" y="40" width="10" height="6" rx="1.6" fill="url(#led)"/>
+    <rect x="42" y="32" width="10" height="6" rx="1.6" fill="url(#led)"/>
+  </g>
+
+  <!-- 꺼진 세그먼트(희미하게): 계기판 격자 느낌 -->
+  <g fill="#ffb000" opacity="0.10">
+    <rect x="12" y="16" width="10" height="6" rx="1.6"/>
+    <rect x="12" y="8"  width="10" height="6" rx="1.6"/>
+    <rect x="42" y="24" width="10" height="6" rx="1.6"/>
+    <rect x="42" y="16" width="10" height="6" rx="1.6"/>
+    <rect x="42" y="8"  width="10" height="6" rx="1.6"/>
+  </g>
+
+  <!-- 하단 베이스라인 -->
+  <rect x="10" y="50" width="44" height="2.5" rx="1.25" fill="#ffb000" opacity="0.5"/>
+</svg>
