@@ -79,3 +79,11 @@ export async function loadAllTracks() {
     t.onerror = () => reject(t.error);
   });
 }
+
+/** 저장된 곡·순서 데이터를 모두 삭제(전체 비우기) */
+export function clearAllStored() {
+  return Promise.all([
+    tx('tracks', 'readwrite', (s) => s.clear()),
+    tx('meta', 'readwrite', (s) => s.clear()),
+  ]);
+}

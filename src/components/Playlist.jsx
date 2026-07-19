@@ -22,7 +22,7 @@ function stripExt(name) {
  * 순서 변경은 HTML5 Drag and Drop 으로 구현했다. 드래그 중인 항목(dragIndex)과
  * 드롭 대상(overIndex)을 로컬 상태로 추적해 시각적 피드백을 준다.
  */
-export default function Playlist({ tracks, currentIndex, onSelect, onRemove, onReorder, onShuffle }) {
+export default function Playlist({ tracks, currentIndex, onSelect, onRemove, onReorder, onShuffle, onClearAll }) {
   const [dragIndex, setDragIndex] = useState(null);
   const [overIndex, setOverIndex] = useState(null);
 
@@ -34,19 +34,35 @@ export default function Playlist({ tracks, currentIndex, onSelect, onRemove, onR
     setOverIndex(null);
   };
 
+  /** 파괴적 동작이므로 브라우저 확인 창을 거친 뒤 실행한다 */
+  const clearAll = () => {
+    if (window.confirm('재생목록과 브라우저에 저장된 음악 파일을 모두 삭제할까요?')) {
+      onClearAll();
+    }
+  };
+
   return (
     <div className="mt-3 border-t border-ink-600/60 pt-3">
       <div className="mb-2 flex items-center justify-between">
         <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
           {tracks.length}곡
         </span>
-        <button
-          onClick={onShuffle}
-          disabled={tracks.length < 2}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted transition hover:text-ember-soft disabled:opacity-30"
-        >
-          <ShuffleIcon /> 셔플
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onShuffle}
+            disabled={tracks.length < 2}
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted transition hover:text-ember-soft disabled:opacity-30"
+          >
+            <ShuffleIcon /> 셔플
+          </button>
+          <button
+            onClick={clearAll}
+            title="재생목록과 저장 데이터 전체 삭제"
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted transition hover:text-[#ff6b6b]"
+          >
+            <TrashIcon /> 비우기
+          </button>
+        </div>
       </div>
 
       <ul className="max-h-44 space-y-1 overflow-y-auto pr-1">
@@ -104,6 +120,13 @@ export default function Playlist({ tracks, currentIndex, onSelect, onRemove, onR
   );
 }
 
+function TrashIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
+    </svg>
+  );
+}
 function ShuffleIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

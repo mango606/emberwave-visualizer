@@ -8,7 +8,6 @@ import VolumeMixer from './components/VolumeMixer';
 import EqControls from './components/EqControls';
 import AsmrPlayer from './components/AsmrPlayer';
 import LiveInput from './components/LiveInput';
-import RecorderButton from './components/RecorderButton';
 import { useAudioEngine } from './hooks/useAudioEngine';
 import { PALETTES, DEFAULT_PALETTE_ID } from './constants/palettes';
 import { VISUAL_MODES, DEFAULT_MODE_ID } from './constants/visualModes';
@@ -48,7 +47,6 @@ export default function App() {
   // 안내 토스트: 미지원 기능 클릭 시 등에 짧게 표시 후 자동 소멸
   const [toast, setToast] = useState('');
   const toastTimerRef = useRef(null);
-  const canvasElRef = useRef(null); // 녹화용: Visualizer 캔버스 참조
   const showToast = useCallback((msg) => {
     setToast(msg);
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -119,9 +117,6 @@ export default function App() {
             active={
               engine.state.isPlaying || engine.state.micOn || engine.state.tabOn
             }
-            onCanvasReady={(el) => {
-              canvasElRef.current = el;
-            }}
           />
         </section>
 
@@ -150,6 +145,7 @@ export default function App() {
               onRemove={engine.removeTrack}
               onReorder={engine.reorderTracks}
               onShuffle={engine.shuffle}
+              onClearAll={engine.clearAll}
             />
           </div>
 
@@ -208,13 +204,6 @@ export default function App() {
           </div>
         </aside>
       </main>
-
-      {/* 비주얼 녹화·공유: 최하단 중앙, 평소엔 반투명 */}
-      <RecorderButton
-        getCanvas={() => canvasElRef.current}
-        getAudioStream={engine.getRecordingAudioStream}
-        onNotice={showToast}
-      />
 
       {/* 안내 토스트 */}
       {toast && (

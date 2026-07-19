@@ -14,7 +14,7 @@ import { rgba, sampleGradient } from '../lib/colorUtils';
  * 성능: props 가 바뀌어도 루프를 재시작하지 않도록 최신 값을 configRef 에 담고,
  *       레벨/피크/데이터 버퍼는 ref 로 유지해 매 프레임 재할당을 피한다.
  */
-export default function Visualizer({ analyserRef, palette, mode, active, onCanvasReady }) {
+export default function Visualizer({ analyserRef, palette, mode, active }) {
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
 
@@ -27,22 +27,37 @@ export default function Visualizer({ analyserRef, palette, mode, active, onCanva
   const startRef = useRef(performance.now());
 
   // 앰비언트(전체화면) 모드: 우측 하단 호버 버튼으로 진입/해제
+  // 일부 브라우저(Safari 등)는 webkit 접두사 API 만 제공하므로,
+  // 요소 조회·진입·해제·이벤트 모두 표준과 접두사 양쪽을 함께 다룬다.
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const getFsElement = () =>
+    document.fullscreenElement || document.webkitFullscreenElement || null;
+
   useEffect(() => {
-    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    const onChange = () => setIsFullscreen(Boolean(getFsElement()));
     document.addEventListener('fullscreenchange', onChange);
-    return () => document.removeEventListener('fullscreenchange', onChange);
+    document.addEventListener('webkitfullscreenchange', onChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      document.removeEventListener('webkitfullscreenchange', onChange);
+    };
   }, []);
 
   const toggleFullscreen = async () => {
     try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
+      if (getFsElement()) {
+        // 해제: 표준 → webkit 순으로 시도
+        if (document.exitFullscreen) await document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
       } else {
-        await wrapRef.current?.requestFullscreen();
+        const el = wrapRef.current;
+        if (!el) return;
+        if (el.requestFullscreen) await el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
       }
     } catch {
-      // iOS Safari 등 미지원 환경은 조용히 무시
+      // 전체화면 미지원 환경은 조용히 무시
     }
   };
 
@@ -50,11 +65,6 @@ export default function Visualizer({ analyserRef, palette, mode, active, onCanva
   useEffect(() => {
     configRef.current = { palette, mode, active };
   }, [palette, mode, active]);
-
-  // 녹화 등 외부 기능이 캔버스에 접근할 수 있도록 마운트 시 1회 전달
-  useEffect(() => {
-    onCanvasReady?.(canvasRef.current);
-  }, [onCanvasReady]);
 
   // 캔버스 해상도(devicePixelRatio) 대응 리사이즈
   useEffect(() => {

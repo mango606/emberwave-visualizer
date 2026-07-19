@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { scanAudioFiles, supportsFSA } from '../lib/fileSystem';
-import { saveTrack, deleteTrack, saveOrder, loadAllTracks } from '../lib/trackStore';
+import { saveTrack, deleteTrack, saveOrder, loadAllTracks, clearAllStored } from '../lib/trackStore';
 
 /**
  * 파일의 재생 길이(초)를 비동기로 측정한다.
@@ -65,7 +65,6 @@ export function useAudioEngine() {
   // 연결된 폴더(File System Access API): { handle, name, paths: Set<string> }
   const folderRef = useRef(null);
   const pollTimerRef = useRef(null);
-  const recDestRef = useRef(null); // 녹화용 MediaStreamDestination(1회 생성 후 재사용)
 
   const [state, setState] = useState({
     tracks: [], // UI 표시용: [{ id, name, duration }]
@@ -461,6 +460,34 @@ export function useAudioEngine() {
   }, []);
 
   /**
+   * 전체 비우기: 재생을 멈추고 목록·objectURL·IndexedDB 저장 데이터를
+   * 모두 삭제한다. 브라우저가 점유하던 디스크 공간이 해제된다.
+   */
+  const clearAll = useCallback(() => {
+    const el = audioElRef.current;
+    tracksRef.current.forEach((t) => URL.revokeObjectURL(t.url));
+    tracksRef.current = [];
+    if (el) {
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
+    }
+    indexRef.current = -1;
+    currentIdRef.current = null;
+    setState((s) => ({
+      ...s,
+      tracks: [],
+      currentIndex: -1,
+      fileName: '',
+      isReady: false,
+      isPlaying: false,
+      currentTime: 0,
+      duration: 0,
+    }));
+    clearAllStored().catch(() => {}); // 저장 불가 환경은 무시
+  }, []);
+
+  /**
    * 마운트 시 1회: IndexedDB 에 저장된 재생목록을 복원한다.
    * 저장된 uid 를 그대로 유지해야 이후 삭제·순서 변경이 같은 키로 반영된다.
    * (appendTracks 를 쓰지 않는 이유: 새 uid 발급 + Blob 재저장 낭비 방지)
@@ -561,24 +588,6 @@ export function useAudioEngine() {
       // 일부 브라우저의 유효성 예외는 무시
     }
   }, [state.duration, state.isPlaying, state.currentIndex]);
-
-  /**
-   * 녹화용 오디오 스트림: analyser(음악 post-EQ + 마이크 + 탭 소리가 합류하는
-   * 지점)를 MediaStreamDestination 으로 분기해 반환한다. 스피커 출력에는
-   * 영향이 없고, 목적지 노드는 1회 생성 후 재사용하므로 추가 비용이 없다.
-   * 그래프가 아직 없으면(재생 전) null 을 반환해 영상만 녹화하게 한다.
-   */
-  const getRecordingAudioStream = useCallback(() => {
-    const ctx = ctxRef.current;
-    const analyser = analyserRef.current;
-    if (!ctx || !analyser) return null;
-    if (!recDestRef.current) {
-      const dest = ctx.createMediaStreamDestination();
-      analyser.connect(dest);
-      recDestRef.current = dest;
-    }
-    return recDestRef.current.stream;
-  }, []);
 
   const setMusicVolume = useCallback((v) => {
     volumeRef.current = v;
@@ -698,13 +707,13 @@ export function useAudioEngine() {
     shuffle,
     reorderTracks,
     removeTrack,
+    clearAll,
     seek,
     setMusicVolume,
     setEq,
     setAnalyserConfig,
     toggleMic,
     toggleTab,
-    getRecordingAudioStream,
     connectFolder,
     syncFolder,
     disconnectFolder,
