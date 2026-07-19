@@ -22,7 +22,7 @@ function stripExt(name) {
  * 순서 변경은 HTML5 Drag and Drop 으로 구현했다. 드래그 중인 항목(dragIndex)과
  * 드롭 대상(overIndex)을 로컬 상태로 추적해 시각적 피드백을 준다.
  */
-export default function Playlist({ tracks, currentIndex, onSelect, onRemove, onReorder, onShuffle, onClearAll }) {
+export default function Playlist({ tracks, currentIndex, onSelect, onRemove, onReorder, onClearAll }) {
   const [dragIndex, setDragIndex] = useState(null);
   const [overIndex, setOverIndex] = useState(null);
 
@@ -80,26 +80,17 @@ export default function Playlist({ tracks, currentIndex, onSelect, onRemove, onR
         <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
           {tracks.length}곡
         </span>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={onShuffle}
-            disabled={tracks.length < 2}
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted transition hover:text-ember-soft disabled:opacity-30"
-          >
-            <ShuffleIcon /> 셔플
-          </button>
-          <button
-            onClick={handleClear}
-            title="재생목록과 저장 데이터 전체 삭제"
-            className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] transition ${
-              confirmClear
-                ? 'bg-[#ff6b6b]/15 text-[#ff6b6b]'
-                : 'text-muted hover:text-[#ff6b6b]'
-            }`}
-          >
-            <TrashIcon /> {confirmClear ? '한 번 더 누르면 삭제' : '비우기'}
-          </button>
-        </div>
+        <button
+          onClick={handleClear}
+          title="재생목록과 저장 데이터 전체 삭제"
+          className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] transition ${
+            confirmClear
+              ? 'bg-[#ff6b6b]/15 text-[#ff6b6b]'
+              : 'text-muted hover:text-[#ff6b6b]'
+          }`}
+        >
+          <TrashIcon /> {confirmClear ? '한 번 더 누르면 삭제' : '비우기'}
+        </button>
       </div>
 
       <ul className="max-h-44 space-y-1 overflow-y-auto pr-1">
@@ -213,13 +204,6 @@ function TrashIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
-    </svg>
-  );
-}
-function ShuffleIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
     </svg>
   );
 }

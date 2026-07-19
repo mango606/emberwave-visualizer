@@ -153,6 +153,7 @@ export default function App() {
               onNotice={showToast}
               repeatMode={repeat}
               onCycleRepeat={cycleRepeat}
+              onShuffle={engine.shuffle}
             />
             <Playlist
               tracks={engine.state.tracks}
@@ -160,7 +161,6 @@ export default function App() {
               onSelect={engine.playTrack}
               onRemove={engine.removeTrack}
               onReorder={engine.reorderTracks}
-              onShuffle={engine.shuffle}
               onClearAll={engine.clearAll}
             />
           </div>

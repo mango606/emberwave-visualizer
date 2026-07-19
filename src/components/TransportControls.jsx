@@ -27,6 +27,7 @@ export default function TransportControls({
   onNotice,
   repeatMode,
   onCycleRepeat,
+  onShuffle,
 }) {
   const fileRef = useRef(null);
   const dirRef = useRef(null);
@@ -132,8 +133,17 @@ export default function TransportControls({
         className="hidden"
       />
 
-      {/* 이전 · 재생/일시정지 · 다음 · 반복 */}
+      {/* 셔플 · 이전 · 재생/일시정지 · 다음 · 반복 (좌우 대칭 배치) */}
       <div className="flex items-center justify-center gap-4">
+        <button
+          onClick={onShuffle}
+          disabled={!multi}
+          aria-label="재생목록 셔플"
+          title="재생목록 셔플"
+          className="mr-1 text-muted transition enabled:hover:text-ember-soft disabled:opacity-25"
+        >
+          <ShuffleIcon />
+        </button>
         <button
           onClick={onPrev}
           disabled={!hasTracks}
@@ -221,6 +231,13 @@ function FolderIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </svg>
+  );
+}
+function ShuffleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
     </svg>
   );
 }
