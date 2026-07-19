@@ -14,7 +14,7 @@ import { rgba, sampleGradient } from '../lib/colorUtils';
  * 성능: props 가 바뀌어도 루프를 재시작하지 않도록 최신 값을 configRef 에 담고,
  *       레벨/피크/데이터 버퍼는 ref 로 유지해 매 프레임 재할당을 피한다.
  */
-export default function Visualizer({ analyserRef, palette, mode, active }) {
+export default function Visualizer({ analyserRef, palette, mode, active, onCanvasReady }) {
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
 
@@ -50,6 +50,11 @@ export default function Visualizer({ analyserRef, palette, mode, active }) {
   useEffect(() => {
     configRef.current = { palette, mode, active };
   }, [palette, mode, active]);
+
+  // 녹화 등 외부 기능이 캔버스에 접근할 수 있도록 마운트 시 1회 전달
+  useEffect(() => {
+    onCanvasReady?.(canvasRef.current);
+  }, [onCanvasReady]);
 
   // 캔버스 해상도(devicePixelRatio) 대응 리사이즈
   useEffect(() => {

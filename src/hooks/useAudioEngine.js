@@ -65,6 +65,7 @@ export function useAudioEngine() {
   // 연결된 폴더(File System Access API): { handle, name, paths: Set<string> }
   const folderRef = useRef(null);
   const pollTimerRef = useRef(null);
+  const recDestRef = useRef(null); // 녹화용 MediaStreamDestination(1회 생성 후 재사용)
 
   const [state, setState] = useState({
     tracks: [], // UI 표시용: [{ id, name, duration }]
@@ -543,6 +544,42 @@ export function useAudioEngine() {
   }, [togglePlay, prev, next, seek]);
 
   /** 음악 볼륨(0~1). 그래프 생성 전이면 보류값으로 저장했다가 생성 시 반영 */
+  // 잠금화면 진행 바: 곡 로드/재생 상태 변화 시에만 알려준다.
+  // timeupdate 마다 갱신하지 않아도 브라우저가 재생 위치를 스스로 보간하므로
+  // 성능 비용 없이 정확한 진행 바를 표시할 수 있다.
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || !navigator.mediaSession.setPositionState) return;
+    const el = audioElRef.current;
+    if (!el || !Number.isFinite(state.duration) || state.duration <= 0) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: state.duration,
+        playbackRate: el.playbackRate || 1,
+        position: Math.min(el.currentTime, state.duration),
+      });
+    } catch {
+      // 일부 브라우저의 유효성 예외는 무시
+    }
+  }, [state.duration, state.isPlaying, state.currentIndex]);
+
+  /**
+   * 녹화용 오디오 스트림: analyser(음악 post-EQ + 마이크 + 탭 소리가 합류하는
+   * 지점)를 MediaStreamDestination 으로 분기해 반환한다. 스피커 출력에는
+   * 영향이 없고, 목적지 노드는 1회 생성 후 재사용하므로 추가 비용이 없다.
+   * 그래프가 아직 없으면(재생 전) null 을 반환해 영상만 녹화하게 한다.
+   */
+  const getRecordingAudioStream = useCallback(() => {
+    const ctx = ctxRef.current;
+    const analyser = analyserRef.current;
+    if (!ctx || !analyser) return null;
+    if (!recDestRef.current) {
+      const dest = ctx.createMediaStreamDestination();
+      analyser.connect(dest);
+      recDestRef.current = dest;
+    }
+    return recDestRef.current.stream;
+  }, []);
+
   const setMusicVolume = useCallback((v) => {
     volumeRef.current = v;
     if (gainRef.current) gainRef.current.gain.value = v;
@@ -667,6 +704,7 @@ export function useAudioEngine() {
     setAnalyserConfig,
     toggleMic,
     toggleTab,
+    getRecordingAudioStream,
     connectFolder,
     syncFolder,
     disconnectFolder,
