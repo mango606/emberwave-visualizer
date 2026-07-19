@@ -41,6 +41,25 @@ export default function Playlist({ tracks, currentIndex, onSelect, onRemove, onR
     setOverIndex(null);
   };
 
+  // 행별 액션 열림 상태: 그립(⋮⋮)을 탭하면 해당 행의 이동/삭제 버튼이 나타난다.
+  // 터치 기기의 hover 부재와 드래그 미지원(HTML5 DnD)을 동시에 해결한다.
+  const [openIndex, setOpenIndex] = useState(null);
+
+  const moveUp = (i) => {
+    if (i <= 0) return;
+    onReorder(i, i - 1);
+    setOpenIndex(i - 1); // 이동한 행을 계속 따라간다
+  };
+  const moveDown = (i) => {
+    if (i >= tracks.length - 1) return;
+    onReorder(i, i + 1);
+    setOpenIndex(i + 1);
+  };
+  const removeAt = (i) => {
+    setOpenIndex(null);
+    onRemove(i);
+  };
+
   const handleClear = () => {
     if (!confirmClear) {
       setConfirmClear(true);
@@ -101,9 +120,17 @@ export default function Playlist({ tracks, currentIndex, onSelect, onRemove, onR
                 dragIndex === i ? 'opacity-40' : ''
               }`}
             >
-              <span className="shrink-0 cursor-grab text-ink-600 group-hover:text-muted" aria-hidden="true">
+              {/* 그립: 데스크톱에서는 드래그 손잡이, 탭하면 액션 버튼 토글 */}
+              <button
+                onClick={() => setOpenIndex(openIndex === i ? null : i)}
+                aria-label="트랙 이동·삭제 메뉴"
+                aria-expanded={openIndex === i}
+                className={`shrink-0 cursor-grab px-0.5 py-1 transition ${
+                  openIndex === i ? 'text-ember-soft' : 'text-ink-600 group-hover:text-muted'
+                }`}
+              >
                 <GripIcon />
-              </span>
+              </button>
 
               {/* 클릭 시 해당 곡 재생 */}
               <button
@@ -116,17 +143,47 @@ export default function Playlist({ tracks, currentIndex, onSelect, onRemove, onR
                 <span className="truncate">{t.title || stripExt(t.name)}</span>
               </button>
 
-              <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted">
-                {fmt(t.duration)}
-              </span>
-
-              <button
-                onClick={() => onRemove(i)}
-                aria-label={`${stripExt(t.name)} 삭제`}
-                className="shrink-0 text-muted opacity-0 transition hover:text-[#ff6b6b] focus:opacity-100 group-hover:opacity-100"
-              >
-                <XIcon />
-              </button>
+              {openIndex === i ? (
+                /* 열린 행: 위/아래 이동 + 삭제 (터치용 액션) */
+                <span className="flex shrink-0 items-center gap-0.5">
+                  <button
+                    onClick={() => moveUp(i)}
+                    disabled={i === 0}
+                    aria-label="위로 이동"
+                    className="px-1 py-1 text-muted transition hover:text-white disabled:opacity-25"
+                  >
+                    <UpIcon />
+                  </button>
+                  <button
+                    onClick={() => moveDown(i)}
+                    disabled={i === tracks.length - 1}
+                    aria-label="아래로 이동"
+                    className="px-1 py-1 text-muted transition hover:text-white disabled:opacity-25"
+                  >
+                    <DownIcon />
+                  </button>
+                  <button
+                    onClick={() => removeAt(i)}
+                    aria-label={`${stripExt(t.name)} 삭제`}
+                    className="px-1 py-1 text-muted transition hover:text-[#ff6b6b]"
+                  >
+                    <XIcon />
+                  </button>
+                </span>
+              ) : (
+                <>
+                  <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted">
+                    {fmt(t.duration)}
+                  </span>
+                  <button
+                    onClick={() => removeAt(i)}
+                    aria-label={`${stripExt(t.name)} 삭제`}
+                    className="shrink-0 text-muted opacity-0 transition hover:text-[#ff6b6b] focus:opacity-100 group-hover:opacity-100"
+                  >
+                    <XIcon />
+                  </button>
+                </>
+              )}
             </li>
           );
         })}
@@ -135,6 +192,20 @@ export default function Playlist({ tracks, currentIndex, onSelect, onRemove, onR
   );
 }
 
+function UpIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m18 15-6-6-6 6" />
+    </svg>
+  );
+}
+function DownIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
 function TrashIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

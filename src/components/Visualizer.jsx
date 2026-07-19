@@ -75,6 +75,18 @@ export default function Visualizer({ analyserRef, palette, mode, active }) {
     };
   }, [isFullscreen]);
 
+  // 탭하여 버튼 표시: 터치 기기에는 hover 가 없으므로, 화면을 탭하면
+  // 전체화면 버튼이 3초간 나타났다가 사라진다(동영상 플레이어 관례).
+  // 데스크톱에서는 기존 hover 노출과 병행 동작한다.
+  const [revealed, setRevealed] = useState(false);
+  const revealTimerRef = useRef(null);
+  const reveal = () => {
+    setRevealed(true);
+    clearTimeout(revealTimerRef.current);
+    revealTimerRef.current = setTimeout(() => setRevealed(false), 3000);
+  };
+  useEffect(() => () => clearTimeout(revealTimerRef.current), []);
+
   const toggleFullscreen = async () => {
     try {
       if (getFsElement()) {
@@ -210,15 +222,17 @@ export default function Visualizer({ analyserRef, palette, mode, active }) {
   return (
     <div
       ref={wrapRef}
+      onClick={reveal}
       className={`relative h-full w-full overflow-hidden rounded-2xl border border-ink-600/50 bg-black ${
         isFullscreen && cursorIdle ? 'cursor-none' : ''
       }`}
     >
       <canvas ref={canvasRef} className="block h-full w-full" />
 
-      {/* 앰비언트(전체화면) 진입 버튼: 평소엔 숨겨져 있다가
-          우측 하단 영역에 마우스를 올리면 나타나 감상을 방해하지 않는다.
-          전체화면에서 커서가 숨을 때는 버튼도 함께 사라진다. */}
+      {/* 앰비언트(전체화면) 진입 버튼:
+          - 데스크톱: 우측 하단 호버 시 표시
+          - 터치: 화면을 탭하면 3초간 표시
+          - 전체화면에서 커서가 숨을 때는 버튼도 함께 사라진다 */}
       <div
         className={`group absolute bottom-0 right-0 z-10 h-24 w-24 ${
           isFullscreen && cursorIdle ? 'pointer-events-none' : ''
@@ -229,7 +243,11 @@ export default function Visualizer({ analyserRef, palette, mode, active }) {
           aria-label={isFullscreen ? '전체화면 종료' : '전체화면으로 감상'}
           title={isFullscreen ? '전체화면 종료' : '전체화면으로 감상'}
           className={`absolute bottom-3 right-3 grid h-9 w-9 place-items-center rounded-full border border-ink-600 bg-ink-800/80 text-muted backdrop-blur transition duration-300 hover:text-white focus-visible:opacity-100 ${
-            isFullscreen && cursorIdle ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'
+            isFullscreen && cursorIdle
+              ? 'opacity-0'
+              : revealed
+                ? 'opacity-100'
+                : 'opacity-0 group-hover:opacity-100'
           }`}
         >
           {isFullscreen ? <CompressIcon /> : <ExpandIcon />}
