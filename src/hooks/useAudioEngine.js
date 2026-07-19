@@ -437,6 +437,46 @@ export function useAudioEngine() {
     if (el?.src) el.currentTime = time;
   }, []);
 
+  /**
+   * Media Session API: 모바일에서 화면을 끄거나 다른 앱으로 전환해도
+   * 재생이 유지되고, 잠금화면·알림창에 곡 정보와 재생 컨트롤이 표시된다.
+   * (탭을 완전히 닫으면 웹 특성상 재생이 종료된다)
+   * 참조하는 콜백들(togglePlay 등)이 모두 선언된 뒤에 등록해야 하므로 이 위치에 둔다.
+   */
+  // 곡이 바뀔 때: 잠금화면에 표시될 메타데이터 갱신
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || !state.fileName) return;
+    navigator.mediaSession.metadata = new window.MediaMetadata({
+      title: state.fileName.replace(/\.[^.]+$/, ''), // 확장자 가림(화면 표기와 통일)
+      artist: 'Emberwave',
+      artwork: [{ src: '/icon.svg', sizes: '512x512', type: 'image/svg+xml' }],
+    });
+  }, [state.fileName]);
+
+  // 재생 상태: 잠금화면 버튼의 ▶/⏸ 표시와 동기화
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.playbackState = state.isPlaying ? 'playing' : 'paused';
+  }, [state.isPlaying]);
+
+  // 잠금화면·이어폰 버튼 액션 핸들러 등록
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    const ms = navigator.mediaSession;
+    ms.setActionHandler('play', () => togglePlay());
+    ms.setActionHandler('pause', () => togglePlay());
+    ms.setActionHandler('previoustrack', () => prev());
+    ms.setActionHandler('nexttrack', () => next());
+    ms.setActionHandler('seekto', (d) => {
+      if (typeof d.seekTime === 'number') seek(d.seekTime);
+    });
+    return () => {
+      ['play', 'pause', 'previoustrack', 'nexttrack', 'seekto'].forEach((a) =>
+        ms.setActionHandler(a, null),
+      );
+    };
+  }, [togglePlay, prev, next, seek]);
+
   /** 음악 볼륨(0~1). 그래프 생성 전이면 보류값으로 저장했다가 생성 시 반영 */
   const setMusicVolume = useCallback((v) => {
     volumeRef.current = v;

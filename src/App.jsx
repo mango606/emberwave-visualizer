@@ -12,18 +12,42 @@ import { useAudioEngine } from './hooks/useAudioEngine';
 import { PALETTES, DEFAULT_PALETTE_ID } from './constants/palettes';
 import { VISUAL_MODES, DEFAULT_MODE_ID } from './constants/visualModes';
 import { watchUrl } from './lib/youtube';
+import { loadSettings, saveSettings } from './lib/storage';
+
+// 앱 시작 시 1회 로드한 저장 설정(없으면 null)
+const saved = loadSettings();
 
 export default function App() {
   const engine = useAudioEngine();
   const { setAnalyserConfig, setMusicVolume, setEq: applyEq } = engine;
   const isPlaying = engine.state.isPlaying;
 
-  const [paletteId, setPaletteId] = useState(DEFAULT_PALETTE_ID);
-  const [modeId, setModeId] = useState(DEFAULT_MODE_ID);
-  const [musicVol, setMusicVol] = useState(50); // 음악 볼륨 기본값 50
-  const [asmrVol, setAsmrVol] = useState(50); // 유튜브 볼륨 기본값 50
-  const [eq, setEq] = useState({ bass: 0, mid: 0, treble: 0 }); // 3밴드 EQ(dB)
+  // 저장된 값이 유효하면 복원, 아니면 기본값 (lazy initializer 로 최초 1회만 평가)
+  const [paletteId, setPaletteId] = useState(() =>
+    PALETTES.some((p) => p.id === saved?.paletteId) ? saved.paletteId : DEFAULT_PALETTE_ID,
+  );
+  const [modeId, setModeId] = useState(() =>
+    VISUAL_MODES.some((m) => m.id === saved?.modeId) ? saved.modeId : DEFAULT_MODE_ID,
+  );
+  const [musicVol, setMusicVol] = useState(() =>
+    Number.isFinite(saved?.musicVol) ? Math.min(100, Math.max(0, saved.musicVol)) : 50,
+  );
+  const [asmrVol, setAsmrVol] = useState(() =>
+    Number.isFinite(saved?.asmrVol) ? Math.min(100, Math.max(0, saved.asmrVol)) : 50,
+  );
+  const [eq, setEq] = useState(() => {
+    const e = saved?.eq;
+    const ok = (v) => Number.isFinite(v) && v >= -12 && v <= 12;
+    return e && ok(e.bass) && ok(e.mid) && ok(e.treble)
+      ? { bass: e.bass, mid: e.mid, treble: e.treble }
+      : { bass: 0, mid: 0, treble: 0 };
+  });
   const [asmrInfo, setAsmrInfo] = useState(null); // { id, title } | null
+
+  // 설정 변경 시마다 저장(작은 객체라 디바운스 불필요)
+  useEffect(() => {
+    saveSettings({ paletteId, modeId, musicVol, asmrVol, eq });
+  }, [paletteId, modeId, musicVol, asmrVol, eq]);
 
   const palette = useMemo(
     () => PALETTES.find((p) => p.id === paletteId) ?? PALETTES[0],
