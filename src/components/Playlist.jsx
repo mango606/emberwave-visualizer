@@ -98,7 +98,7 @@ export default function Playlist({ tracks, currentIndex, onSelect, onRemove, onR
                 <span className="w-3 shrink-0 text-right font-mono text-[10px]">
                   {active ? '▶' : i + 1}
                 </span>
-                <span className="truncate">{stripExt(t.name)}</span>
+                <span className="truncate">{t.title || stripExt(t.name)}</span>
               </button>
 
               <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted">

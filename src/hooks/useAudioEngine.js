@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { scanAudioFiles, supportsFSA } from '../lib/fileSystem';
 import { saveTrack, deleteTrack, saveOrder, loadAllTracks, clearAllStored } from '../lib/trackStore';
+import { readTags } from '../lib/metadata';
+
+/** 표시용 기본 제목: 파일 확장자를 뗀 파일명 */
+function stripExt(name) {
+  return name.replace(/\.[^.]+$/, '');
+}
 
 /**
  * 파일의 재생 길이(초)를 비동기로 측정한다.
@@ -85,7 +91,15 @@ export function useAudioEngine() {
   const syncTracks = useCallback(() => {
     setState((s) => ({
       ...s,
-      tracks: tracksRef.current.map((t) => ({ id: t.id, name: t.name, duration: t.duration })),
+      tracks: tracksRef.current.map((t) => ({
+        id: t.id,
+        name: t.name,
+        duration: t.duration,
+        title: t.title,
+        artist: t.artist,
+        artUrl: t.artUrl,
+        artType: t.artType,
+      })),
       currentIndex: indexRef.current,
     }));
   }, []);
@@ -115,7 +129,10 @@ export function useAudioEngine() {
       el.removeEventListener('play', onPlay);
       el.removeEventListener('pause', onPause);
       el.removeEventListener('ended', onEnded);
-      tracksRef.current.forEach((t) => URL.revokeObjectURL(t.url));
+      tracksRef.current.forEach((t) => {
+        URL.revokeObjectURL(t.url);
+        if (t.artUrl) URL.revokeObjectURL(t.artUrl);
+      });
       micStreamRef.current?.getTracks().forEach((t) => t.stop());
       dispStreamRef.current?.getTracks().forEach((t) => t.stop());
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
@@ -216,6 +233,32 @@ export function useAudioEngine() {
   }, []);
 
   /**
+   * 태그(제목·아티스트·앨범아트)를 비동기로 읽어 트랙에 채운다.
+   * 태그가 없으면 기본값(파일명 제목)을 그대로 유지한다.
+   */
+  const attachTags = useCallback((track, blob) => {
+    readTags(blob).then((tags) => {
+      // 트랙이 그 사이 삭제됐으면 앨범아트 URL 만 정리하고 종료
+      if (!tracksRef.current.some((t) => t.id === track.id)) {
+        if (tags.artUrl) URL.revokeObjectURL(tags.artUrl);
+        return;
+      }
+      if (tags.title) track.title = tags.title;
+      track.artist = tags.artist;
+      track.artUrl = tags.artUrl;
+      track.artType = tags.artType;
+      setState((s) => ({
+        ...s,
+        tracks: s.tracks.map((x) =>
+          x.id === track.id
+            ? { ...x, title: track.title, artist: track.artist, artUrl: track.artUrl, artType: track.artType }
+            : x,
+        ),
+      }));
+    });
+  }, []);
+
+  /**
    * File 배열을 재생목록 뒤에 이어 붙이는 공용 헬퍼.
    * 파일 선택·폴더 스냅샷·FSA 폴더 스캔 모두 이 경로를 거친다.
    * persist=true 면 파일 원본(Blob)을 IndexedDB 에 저장해 새로고침 후 복원한다.
@@ -229,6 +272,10 @@ export function useAudioEngine() {
         name: f.name,
         url: URL.createObjectURL(f),
         duration: 0,
+        title: stripExt(f.name), // 태그가 없을 때의 기본 제목
+        artist: '',
+        artUrl: '',
+        artType: '',
       }));
       tracksRef.current = [...tracksRef.current, ...added];
 
@@ -236,6 +283,8 @@ export function useAudioEngine() {
         files.forEach((f, i) => saveTrack(added[i].id, { name: f.name, blob: f }).catch(() => {}));
         persistOrder();
       }
+      // 태그(제목·아티스트·앨범아트) 비동기 추출
+      files.forEach((f, i) => attachTags(added[i], f));
 
       if (wasEmpty) {
         indexRef.current = 0;
@@ -258,7 +307,7 @@ export function useAudioEngine() {
       });
       return added;
     },
-    [loadIndex, syncTracks, persistOrder],
+    [loadIndex, syncTracks, persistOrder, attachTags],
   );
 
   /**
@@ -418,6 +467,7 @@ export function useAudioEngine() {
       const wasCurrent = target.id === currentIdRef.current;
       const el = audioElRef.current;
       URL.revokeObjectURL(target.url);
+      if (target.artUrl) URL.revokeObjectURL(target.artUrl); // 앨범아트도 해제
       tracks.splice(i, 1);
       deleteTrack(target.id).catch(() => {});
       persistOrder();
@@ -465,7 +515,10 @@ export function useAudioEngine() {
    */
   const clearAll = useCallback(() => {
     const el = audioElRef.current;
-    tracksRef.current.forEach((t) => URL.revokeObjectURL(t.url));
+    tracksRef.current.forEach((t) => {
+      URL.revokeObjectURL(t.url);
+      if (t.artUrl) URL.revokeObjectURL(t.artUrl); // 앨범아트도 해제
+    });
     tracksRef.current = [];
     if (el) {
       el.pause();
@@ -501,7 +554,19 @@ export function useAudioEngine() {
         const restored = order
           .map((uid) => {
             const r = records.get(uid);
-            return r ? { id: uid, name: r.name, url: URL.createObjectURL(r.blob), duration: 0 } : null;
+            return r
+              ? {
+                  id: uid,
+                  name: r.name,
+                  url: URL.createObjectURL(r.blob),
+                  duration: 0,
+                  title: stripExt(r.name),
+                  artist: '',
+                  artUrl: '',
+                  artType: '',
+                  _blob: r.blob, // 태그 파싱용 임시 참조
+                }
+              : null;
           })
           .filter(Boolean);
         if (!restored.length) return;
@@ -513,6 +578,8 @@ export function useAudioEngine() {
         loadIndex(0, false); // 자동 재생은 하지 않음(오토플레이 정책 + 사용자 의사 존중)
 
         restored.forEach((t) => {
+          attachTags(t, t._blob);
+          delete t._blob; // 파싱 요청 후 참조 해제
           probeDuration(t.url).then((d) => {
             t.duration = d;
             setState((s) => ({
@@ -528,7 +595,7 @@ export function useAudioEngine() {
     return () => {
       cancelled = true;
     };
-  }, [syncTracks, loadIndex]);
+  }, [syncTracks, loadIndex, attachTags]);
 
   /**
    * Media Session API: 모바일에서 화면을 끄거나 다른 앱으로 전환해도
@@ -536,15 +603,18 @@ export function useAudioEngine() {
    * (탭을 완전히 닫으면 웹 특성상 재생이 종료된다)
    * 참조하는 콜백들(togglePlay 등)이 모두 선언된 뒤에 등록해야 하므로 이 위치에 둔다.
    */
-  // 곡이 바뀔 때: 잠금화면에 표시될 메타데이터 갱신
+  // 곡이 바뀔 때: 잠금화면에 표시될 메타데이터 갱신(태그·앨범아트 우선)
   useEffect(() => {
     if (!('mediaSession' in navigator) || !state.fileName) return;
+    const cur = state.tracks[state.currentIndex];
     navigator.mediaSession.metadata = new window.MediaMetadata({
-      title: state.fileName.replace(/\.[^.]+$/, ''), // 확장자 가림(화면 표기와 통일)
-      artist: 'Emberwave',
-      artwork: [{ src: '/icon.svg', sizes: '512x512', type: 'image/svg+xml' }],
+      title: cur?.title || state.fileName.replace(/\.[^.]+$/, ''),
+      artist: cur?.artist || 'Emberwave', // 태그가 없으면 기본값
+      artwork: cur?.artUrl
+        ? [{ src: cur.artUrl, sizes: '512x512', type: cur.artType || 'image/jpeg' }]
+        : [{ src: '/icon.svg', sizes: '512x512', type: 'image/svg+xml' }],
     });
-  }, [state.fileName]);
+  }, [state.fileName, state.currentIndex, state.tracks]);
 
   // 재생 상태: 잠금화면 버튼의 ▶/⏸ 표시와 동기화
   useEffect(() => {

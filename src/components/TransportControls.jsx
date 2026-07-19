@@ -54,12 +54,20 @@ export default function TransportControls({
 
   return (
     <div className="space-y-3">
-      {/* 현재 곡 표시(확장자 가림) */}
-      {state.fileName && (
-        <div className="truncate rounded-lg border border-ink-600/60 bg-ink-700/50 px-3 py-2 text-sm text-white">
-          {state.fileName.replace(/\.[^.]+$/, '')}
-        </div>
-      )}
+      {/* 현재 곡 표시: 태그 제목 우선, 없으면 파일명(확장자 가림) */}
+      {state.fileName &&
+        (() => {
+          const cur = state.tracks[state.currentIndex];
+          const title = cur?.title || state.fileName.replace(/\.[^.]+$/, '');
+          return (
+            <div className="rounded-lg border border-ink-600/60 bg-ink-700/50 px-3 py-2">
+              <div className="truncate text-sm text-white">{title}</div>
+              {cur?.artist && (
+                <div className="truncate text-[11px] text-muted">{cur.artist}</div>
+              )}
+            </div>
+          );
+        })()}
 
       {/* 파일 추가 / 폴더 연결 */}
       <div className="grid grid-cols-2 gap-2">

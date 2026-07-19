@@ -50,6 +50,31 @@ export default function Visualizer({ analyserRef, palette, mode, active }) {
     };
   }, []);
 
+  // 전체화면 중 커서 자동 숨김: 3초간 마우스 입력이 없으면 커서와 종료 버튼을
+  // 함께 숨겨 몰입을 방해하지 않는다. 움직이면 즉시 다시 나타난다.
+  const [cursorIdle, setCursorIdle] = useState(false);
+  useEffect(() => {
+    if (!isFullscreen) {
+      setCursorIdle(false);
+      return;
+    }
+    const wrap = wrapRef.current;
+    let timer;
+    const arm = () => {
+      setCursorIdle(false);
+      clearTimeout(timer);
+      timer = setTimeout(() => setCursorIdle(true), 3000);
+    };
+    arm(); // 진입 직후부터 카운트 시작
+    wrap.addEventListener('mousemove', arm);
+    wrap.addEventListener('touchstart', arm, { passive: true });
+    return () => {
+      clearTimeout(timer);
+      wrap.removeEventListener('mousemove', arm);
+      wrap.removeEventListener('touchstart', arm);
+    };
+  }, [isFullscreen]);
+
   const toggleFullscreen = async () => {
     try {
       if (getFsElement()) {
@@ -185,19 +210,27 @@ export default function Visualizer({ analyserRef, palette, mode, active }) {
   return (
     <div
       ref={wrapRef}
-      className="relative h-full w-full overflow-hidden rounded-2xl border border-ink-600/50 bg-black"
+      className={`relative h-full w-full overflow-hidden rounded-2xl border border-ink-600/50 bg-black ${
+        isFullscreen && cursorIdle ? 'cursor-none' : ''
+      }`}
     >
       <canvas ref={canvasRef} className="block h-full w-full" />
 
       {/* 앰비언트(전체화면) 진입 버튼: 평소엔 숨겨져 있다가
           우측 하단 영역에 마우스를 올리면 나타나 감상을 방해하지 않는다.
-          키보드 사용자를 위해 포커스 시에도 표시(focus-visible). */}
-      <div className="group absolute bottom-0 right-0 z-10 h-24 w-24">
+          전체화면에서 커서가 숨을 때는 버튼도 함께 사라진다. */}
+      <div
+        className={`group absolute bottom-0 right-0 z-10 h-24 w-24 ${
+          isFullscreen && cursorIdle ? 'pointer-events-none' : ''
+        }`}
+      >
         <button
           onClick={toggleFullscreen}
           aria-label={isFullscreen ? '전체화면 종료' : '전체화면으로 감상'}
           title={isFullscreen ? '전체화면 종료' : '전체화면으로 감상'}
-          className="absolute bottom-3 right-3 grid h-9 w-9 place-items-center rounded-full border border-ink-600 bg-ink-800/80 text-muted opacity-0 backdrop-blur transition duration-300 hover:text-white focus-visible:opacity-100 group-hover:opacity-100"
+          className={`absolute bottom-3 right-3 grid h-9 w-9 place-items-center rounded-full border border-ink-600 bg-ink-800/80 text-muted backdrop-blur transition duration-300 hover:text-white focus-visible:opacity-100 ${
+            isFullscreen && cursorIdle ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'
+          }`}
         >
           {isFullscreen ? <CompressIcon /> : <ExpandIcon />}
         </button>
