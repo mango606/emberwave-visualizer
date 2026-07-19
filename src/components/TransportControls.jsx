@@ -25,6 +25,8 @@ export default function TransportControls({
   onSyncFolder,
   onDisconnectFolder,
   onNotice,
+  repeatMode,
+  onCycleRepeat,
 }) {
   const fileRef = useRef(null);
   const dirRef = useRef(null);
@@ -130,7 +132,7 @@ export default function TransportControls({
         className="hidden"
       />
 
-      {/* 이전 · 재생/일시정지 · 다음 */}
+      {/* 이전 · 재생/일시정지 · 다음 · 반복 */}
       <div className="flex items-center justify-center gap-4">
         <button
           onClick={onPrev}
@@ -155,6 +157,22 @@ export default function TransportControls({
           className="text-muted transition enabled:hover:text-white disabled:opacity-25"
         >
           <NextIcon />
+        </button>
+        {/* 반복 모드: 전체 반복 → 한 곡 반복 → 반복 안 함 순환.
+            켜져 있으면 앰버, 꺼져 있으면 흐리게 표시한다. */}
+        <button
+          onClick={onCycleRepeat}
+          aria-label={
+            repeatMode === 'all' ? '전체 반복' : repeatMode === 'one' ? '한 곡 반복' : '반복 안 함'
+          }
+          title={
+            repeatMode === 'all' ? '전체 반복' : repeatMode === 'one' ? '한 곡 반복' : '반복 안 함'
+          }
+          className={`ml-1 transition ${
+            repeatMode === 'none' ? 'text-ink-600 hover:text-muted' : 'text-ember-soft hover:text-ember'
+          }`}
+        >
+          {repeatMode === 'one' ? <RepeatOneIcon /> : <RepeatIcon />}
         </button>
       </div>
 
@@ -203,6 +221,27 @@ function FolderIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </svg>
+  );
+}
+function RepeatIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m17 2 4 4-4 4" />
+      <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+      <path d="m7 22-4-4 4-4" />
+      <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+    </svg>
+  );
+}
+function RepeatOneIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m17 2 4 4-4 4" />
+      <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+      <path d="m7 22-4-4 4-4" />
+      <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+      <path d="M11 10h1v4" />
     </svg>
   );
 }

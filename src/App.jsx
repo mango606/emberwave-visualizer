@@ -42,6 +42,9 @@ export default function App() {
       ? { bass: e.bass, mid: e.mid, treble: e.treble }
       : { bass: 0, mid: 0, treble: 0 };
   });
+  const [repeat, setRepeat] = useState(() =>
+    ['all', 'one', 'none'].includes(saved?.repeat) ? saved.repeat : 'all',
+  );
   const [asmrInfo, setAsmrInfo] = useState(null); // { id, title } | null
 
   // 안내 토스트: 미지원 기능 클릭 시 등에 짧게 표시 후 자동 소멸
@@ -55,8 +58,19 @@ export default function App() {
 
   // 설정 변경 시마다 저장(작은 객체라 디바운스 불필요)
   useEffect(() => {
-    saveSettings({ paletteId, modeId, musicVol, asmrVol, eq });
-  }, [paletteId, modeId, musicVol, asmrVol, eq]);
+    saveSettings({ paletteId, modeId, musicVol, asmrVol, eq, repeat });
+  }, [paletteId, modeId, musicVol, asmrVol, eq, repeat]);
+
+  // 반복 모드를 엔진에 반영
+  const { setRepeatMode } = engine;
+  useEffect(() => {
+    setRepeatMode(repeat);
+  }, [repeat, setRepeatMode]);
+
+  /** 반복 모드 순환: 전체 반복 → 한 곡 반복 → 반복 안 함 */
+  const cycleRepeat = useCallback(() => {
+    setRepeat((r) => (r === 'all' ? 'one' : r === 'one' ? 'none' : 'all'));
+  }, []);
 
   const palette = useMemo(
     () => PALETTES.find((p) => p.id === paletteId) ?? PALETTES[0],
@@ -137,6 +151,8 @@ export default function App() {
               onSyncFolder={engine.syncFolder}
               onDisconnectFolder={engine.disconnectFolder}
               onNotice={showToast}
+              repeatMode={repeat}
+              onCycleRepeat={cycleRepeat}
             />
             <Playlist
               tracks={engine.state.tracks}

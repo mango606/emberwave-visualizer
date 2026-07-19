@@ -61,6 +61,7 @@ export function useAudioEngine() {
   const currentIdRef = useRef(null); // 현재 로드된 트랙의 id(위치 변화에도 유지)
   const onEndedRef = useRef(() => {});
   const pendingPlayRef = useRef(null);
+  const repeatRef = useRef('all'); // 'all' 전체 반복 | 'one' 한 곡 반복 | 'none' 반복 안 함
 
   // 라이브 입력(시각화 전용, destination 에는 연결하지 않음)
   const micStreamRef = useRef(null);
@@ -85,6 +86,7 @@ export function useAudioEngine() {
     inputError: '', // 라이브 입력 오류 메시지
     folderName: '', // 연결된 폴더 이름(FSA)
     folderCount: 0, // 폴더에서 가져온 트랙 수
+    repeatMode: 'all', // 반복 모드
   });
 
   /** tracksRef / indexRef 의 최신 상태를 UI state 에 반영 */
@@ -107,7 +109,7 @@ export function useAudioEngine() {
   /** 최초 1회: 오디오 엘리먼트 준비 + 이벤트 바인딩 */
   useEffect(() => {
     const el = new Audio();
-    el.preload = 'metadata';
+    el.preload = 'auto'; // 충분한 사전 버퍼링으로 재생 중 끊김 방지
     audioElRef.current = el;
 
     const onLoaded = () => setState((s) => ({ ...s, duration: el.duration || 0 }));
@@ -147,7 +149,14 @@ export function useAudioEngine() {
       return;
     }
     const Ctx = window.AudioContext || window.webkitAudioContext;
-    const ctx = new Ctx();
+    // 음악 감상용 'playback' 힌트: 버퍼를 넉넉히 잡아 CPU 부하 시 끊김을 막는다.
+    // (구형 webkit 은 옵션 객체를 거부할 수 있어 폴백을 둔다)
+    let ctx;
+    try {
+      ctx = new Ctx({ latencyHint: 'playback' });
+    } catch {
+      ctx = new Ctx();
+    }
     const source = ctx.createMediaElementSource(audioElRef.current);
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 2048;
@@ -383,17 +392,47 @@ export function useAudioEngine() {
     setState((s) => ({ ...s, folderName: '', folderCount: 0 }));
   }, []);
 
-  /** 곡 종료 시 자동 넘김: 여러 곡이면 순환 재생, 단일 곡이면 정지 */
+  /** 곡 종료 시 동작: 반복 모드에 따라 분기한다 */
   useEffect(() => {
     onEndedRef.current = () => {
+      const el = audioElRef.current;
       const tracks = tracksRef.current;
-      if (tracks.length > 1) {
+      const mode = repeatRef.current;
+
+      // 한 곡 반복: 현재 곡을 처음부터 다시 재생
+      if (mode === 'one') {
+        if (el?.src) {
+          el.currentTime = 0;
+          el.play().catch(() => {});
+        }
+        return;
+      }
+
+      const isLast = indexRef.current >= tracks.length - 1;
+
+      // 반복 안 함: 마지막 곡이면 정지, 아니면 다음 곡
+      if (mode === 'none') {
+        if (!tracks.length || isLast) {
+          setState((s) => ({ ...s, isPlaying: false, currentTime: 0 }));
+        } else {
+          loadIndex(indexRef.current + 1, true);
+        }
+        return;
+      }
+
+      // 전체 반복(기본): 순환 재생 (단일 곡도 계속 반복)
+      if (tracks.length) {
         loadIndex((indexRef.current + 1) % tracks.length, true);
-      } else {
-        setState((s) => ({ ...s, isPlaying: false, currentTime: 0 }));
       }
     };
   }, [loadIndex]);
+
+  /** 반복 모드 설정('all' | 'one' | 'none') */
+  const setRepeatMode = useCallback((mode) => {
+    if (!['all', 'one', 'none'].includes(mode)) return;
+    repeatRef.current = mode;
+    setState((s) => ({ ...s, repeatMode: mode }));
+  }, []);
 
   /** 재생/일시정지 토글 */
   const togglePlay = useCallback(async () => {
@@ -778,6 +817,7 @@ export function useAudioEngine() {
     reorderTracks,
     removeTrack,
     clearAll,
+    setRepeatMode,
     seek,
     setMusicVolume,
     setEq,
