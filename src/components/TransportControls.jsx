@@ -12,7 +12,18 @@ function fmt(t) {
  * TransportControls
  * MP3 파일(복수) 업로드 + 이전/재생·일시정지/다음 + 탐색(seek) 바.
  */
-export default function TransportControls({ state, onFiles, onToggle, onSeek, onPrev, onNext }) {
+export default function TransportControls({
+  state,
+  onFiles,
+  onToggle,
+  onSeek,
+  onPrev,
+  onNext,
+  fsaSupported,
+  onConnectFolder,
+  onSyncFolder,
+  onDisconnectFolder,
+}) {
   const fileRef = useRef(null);
   const dirRef = useRef(null);
   const hasTracks = state.tracks.length > 0;
@@ -21,6 +32,15 @@ export default function TransportControls({ state, onFiles, onToggle, onSeek, on
   const pickFiles = (e) => {
     if (e.target.files?.length) onFiles(e.target.files);
     e.target.value = ''; // 같은 파일 재선택 가능하도록 초기화
+  };
+
+  /** FSA 지원 시 폴더 핸들 연결(자동 동기화), 미지원 시 스냅샷 폴백 */
+  const handleFolderClick = async () => {
+    if (fsaSupported) {
+      await onConnectFolder();
+    } else {
+      dirRef.current?.click();
+    }
   };
 
   return (
@@ -41,12 +61,38 @@ export default function TransportControls({ state, onFiles, onToggle, onSeek, on
           <PlusIcon /> 파일 추가
         </button>
         <button
-          onClick={() => dirRef.current?.click()}
+          onClick={handleFolderClick}
           className="flex items-center justify-center gap-1.5 rounded-lg border border-ink-600 bg-ink-700 px-3 py-2.5 text-sm text-muted transition hover:border-muted hover:text-white"
         >
           <FolderIcon /> 폴더 연결
         </button>
       </div>
+
+      {/* 연결된 폴더 칩: 폴더명 + 즉시 동기화 + 해제 */}
+      {state.folderName && (
+        <div className="flex items-center gap-2 rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-xs">
+          <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-ember" />
+          <span className="min-w-0 flex-1 truncate text-ember-soft">
+            {state.folderName} · {state.folderCount}곡 자동 동기화 중
+          </span>
+          <button
+            onClick={onSyncFolder}
+            title="지금 동기화"
+            aria-label="지금 동기화"
+            className="shrink-0 text-muted transition hover:text-white"
+          >
+            <RefreshIcon />
+          </button>
+          <button
+            onClick={onDisconnectFolder}
+            title="폴더 연결 해제"
+            aria-label="폴더 연결 해제"
+            className="shrink-0 text-muted transition hover:text-[#ff6b6b]"
+          >
+            <UnlinkIcon />
+          </button>
+        </div>
+      )}
       <input
         ref={fileRef}
         type="file"
@@ -115,6 +161,20 @@ export default function TransportControls({ state, onFiles, onToggle, onSeek, on
   );
 }
 
+function RefreshIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
+    </svg>
+  );
+}
+function UnlinkIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
+  );
+}
 function PlusIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">

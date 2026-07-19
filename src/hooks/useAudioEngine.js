@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { scanAudioFiles, supportsFSA } from '../lib/fileSystem';
 
 /**
  * 파일의 재생 길이(초)를 비동기로 측정한다.
@@ -51,6 +52,10 @@ export function useAudioEngine() {
   const dispStreamRef = useRef(null);
   const dispNodeRef = useRef(null);
 
+  // 연결된 폴더(File System Access API): { handle, name, paths: Set<string> }
+  const folderRef = useRef(null);
+  const pollTimerRef = useRef(null);
+
   const [state, setState] = useState({
     tracks: [], // UI 표시용: [{ id, name, duration }]
     currentIndex: -1,
@@ -62,6 +67,8 @@ export function useAudioEngine() {
     micOn: false, // 마이크 입력 활성 여부
     tabOn: false, // 탭/화면 오디오 공유 활성 여부
     inputError: '', // 라이브 입력 오류 메시지
+    folderName: '', // 연결된 폴더 이름(FSA)
+    folderCount: 0, // 폴더에서 가져온 트랙 수
   });
 
   /** tracksRef / indexRef 의 최신 상태를 UI state 에 반영 */
@@ -101,6 +108,7 @@ export function useAudioEngine() {
       tracksRef.current.forEach((t) => URL.revokeObjectURL(t.url));
       micStreamRef.current?.getTracks().forEach((t) => t.stop());
       dispStreamRef.current?.getTracks().forEach((t) => t.stop());
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
       ctxRef.current?.close();
     };
   }, []);
@@ -171,18 +179,13 @@ export function useAudioEngine() {
   );
 
   /**
-   * 여러 파일을 받아 재생목록에 추가한다(오디오 파일만 필터링).
-   * 파일 선택과 폴더 연결(webkitdirectory) 양쪽에서 공용으로 사용하며,
-   * 기존 목록을 교체하지 않고 뒤에 이어 붙인다. 목록이 비어 있었다면
-   * 첫 곡을 로드해 재생 준비 상태로 만든다.
+   * File 배열을 재생목록 뒤에 이어 붙이는 공용 헬퍼.
+   * 파일 선택·폴더 스냅샷·FSA 폴더 스캔 모두 이 경로를 거친다.
+   * 목록이 비어 있었다면 첫 곡을 로드해 재생 준비 상태로 만든다.
    */
-  const loadFiles = useCallback(
-    (fileList) => {
-      const files = Array.from(fileList || []).filter(
-        (f) => f.type.startsWith('audio/') || /\.(mp3|m4a|aac|ogg|wav|flac)$/i.test(f.name),
-      );
-      if (!files.length) return;
-
+  const appendTracks = useCallback(
+    (files) => {
+      if (!files.length) return [];
       const wasEmpty = tracksRef.current.length === 0;
       const added = files.map((f) => ({
         id: ++idSeqRef.current,
@@ -211,9 +214,83 @@ export function useAudioEngine() {
           }));
         });
       });
+      return added;
     },
     [loadIndex, syncTracks],
   );
+
+  /**
+   * 여러 파일을 받아 재생목록에 추가한다(오디오 파일만 필터링).
+   * 파일 선택과 폴더 스냅샷(webkitdirectory) 양쪽에서 공용으로 사용한다.
+   */
+  const loadFiles = useCallback(
+    (fileList) => {
+      const files = Array.from(fileList || []).filter(
+        (f) => f.type.startsWith('audio/') || /\.(mp3|m4a|aac|ogg|wav|flac)$/i.test(f.name),
+      );
+      appendTracks(files);
+    },
+    [appendTracks],
+  );
+
+  /** 폴더 재스캔: 아직 목록에 없는 새 파일만 골라 이어 붙인다 */
+  const syncFolder = useCallback(async () => {
+    const folder = folderRef.current;
+    if (!folder) return;
+    try {
+      const entries = await scanAudioFiles(folder.handle);
+      const fresh = entries.filter((e) => !folder.paths.has(e.path));
+      if (fresh.length) {
+        fresh.forEach((e) => folder.paths.add(e.path));
+        appendTracks(fresh.map((e) => e.file));
+        setState((s) => ({ ...s, folderCount: folder.paths.size }));
+      }
+    } catch {
+      // 권한 회수·폴더 삭제 등으로 접근 불가 시 자동 동기화만 중단
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+      folderRef.current = null;
+      setState((s) => ({ ...s, folderName: '', folderCount: 0 }));
+    }
+  }, [appendTracks]);
+
+  /**
+   * File System Access API 로 폴더를 연결한다(Chromium 계열).
+   * 최초 스캔으로 오디오 파일을 목록에 올린 뒤, 20초 간격으로 재스캔해
+   * 폴더에 새로 추가된 곡을 자동으로 반영한다. 기존 곡 재생은 방해하지 않는다.
+   */
+  const connectFolder = useCallback(async () => {
+    if (!supportsFSA()) return false; // 호출부에서 webkitdirectory 폴백
+    try {
+      const handle = await window.showDirectoryPicker({ mode: 'read' });
+      const entries = await scanAudioFiles(handle);
+      folderRef.current = { handle, name: handle.name, paths: new Set(entries.map((e) => e.path)) };
+      appendTracks(entries.map((e) => e.file));
+      setState((s) => ({ ...s, folderName: handle.name, folderCount: entries.length }));
+
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      pollTimerRef.current = setInterval(syncFolder, 20000); // 20초마다 신곡 감지
+      return true;
+    } catch (e) {
+      // 사용자가 선택 창을 닫은 경우(AbortError)는 조용히 무시
+      if (e?.name !== 'AbortError') {
+        setState((s) => ({ ...s, inputError: '폴더에 접근할 수 없습니다.' }));
+      }
+      return true; // FSA 경로를 탔으므로 폴백은 하지 않는다
+    }
+  }, [appendTracks, syncFolder]);
+
+  /** 폴더 연결 해제: 자동 동기화 중단(이미 추가된 곡은 목록에 유지) */
+  const disconnectFolder = useCallback(() => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    folderRef.current = null;
+    setState((s) => ({ ...s, folderName: '', folderCount: 0 }));
+  }, []);
 
   /** 곡 종료 시 자동 넘김: 여러 곡이면 순환 재생, 단일 곡이면 정지 */
   useEffect(() => {
@@ -438,5 +515,9 @@ export function useAudioEngine() {
     setAnalyserConfig,
     toggleMic,
     toggleTab,
+    connectFolder,
+    syncFolder,
+    disconnectFolder,
+    fsaSupported: supportsFSA(),
   };
 }
