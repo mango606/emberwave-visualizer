@@ -1,0 +1,30 @@
+# push/PR 마다 린트와 빌드를 자동 실행하는 CI.
+# 훅 규칙 위반(#310 류)이나 빌드 실패가 main 에 들어오는 것을 원천 차단한다.
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Node 설정 (npm 캐시 포함)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 의존성 설치
+        run: npm ci
+
+      - name: 린트 (react-hooks 규칙 포함)
+        run: npm run lint
+
+      - name: 프로덕션 빌드
+        run: npm run build

@@ -25,7 +25,7 @@ export default function Visualizer({ analyserRef, palette, mode, active }) {
   const sizeRef = useRef({ w: 0, h: 0, dpr: 1 });
   const resizeFnRef = useRef(null); // 전체화면 전환 시 강제 리사이즈용
   const lastDrawRef = useRef(0);
-  const startRef = useRef(performance.now());
+  const startRef = useRef(0); // 앰비언트 물결 기준 시각(첫 프레임에 지연 초기화)
 
   // 앰비언트(전체화면) 모드: 우측 하단 호버 버튼으로 진입/해제
   // 일부 브라우저(Safari 등)는 webkit 접두사 API 만 제공하므로,
@@ -54,10 +54,10 @@ export default function Visualizer({ analyserRef, palette, mode, active }) {
   // 함께 숨겨 몰입을 방해하지 않는다. 움직이면 즉시 다시 나타난다.
   const [cursorIdle, setCursorIdle] = useState(false);
   useEffect(() => {
-    if (!isFullscreen) {
-      setCursorIdle(false);
-      return;
-    }
+    // 전체화면이 아니면 타이머만 정리하면 된다. cursorIdle 값이 남아 있어도
+    // 화면에서는 항상 `isFullscreen && cursorIdle` 로 조합해 쓰므로 무해하고,
+    // 재진입 시 arm() 이 즉시 false 로 되돌린다(effect 내 동기 setState 회피).
+    if (!isFullscreen) return;
     const wrap = wrapRef.current;
     let timer;
     const arm = () => {
@@ -194,6 +194,7 @@ export default function Visualizer({ analyserRef, palette, mode, active }) {
         }
       } else {
         // 무음(대기): '불멍' 앰비언트 물결 — 느린 이중 사인으로 유기적인 흔들림
+        if (!startRef.current) startRef.current = now; // 첫 프레임에 기준 시각 설정
         const t = ((now - startRef.current) / 1000) * mode.idleSpeed;
         for (let i = 0; i < bars; i++) {
           const wave =
